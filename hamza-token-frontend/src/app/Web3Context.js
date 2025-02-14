@@ -40,27 +40,28 @@ export const Web3Provider = ({ children }) => {
         initWeb3();
     }, []);
 
-    // Mint Shares
-    const mintShares = async (to, amount) => {
+    const submitProposal = async (amount, recipient, expiration = 0, baalGas = 300000) => {
         if (!contract) return;
         try {
-            const tx = await contract.mintShares([to], [amount]);
-            await tx.wait();
-            console.log("Shares minted successfully");
-        } catch (error) {
-            console.error("Error minting shares:", error);
-        }
-    };
+            console.log("Submitting proposal...");
+            const proposalData = ethers.AbiCoder.defaultAbiCoder().encode(
+                ["address[]", "uint256[]"],
+                [[recipient], [amount]]
+            );
 
-    // Mint Loot
-    const mintLoot = async (to, amount) => {
-        if (!contract) return;
-        try {
-            const tx = await contract.mintLoot([to], [amount]);
-            await tx.wait();
-            console.log("Loot minted successfully");
+            const tx = await contract.submitProposal(
+                proposalData,
+                expiration,
+                baalGas,
+                "Proposal to deposit funds and receive loot"
+            );
+            const receipt = await tx.wait();
+            const proposalId = receipt.logs[0].args[0]; // Extract proposal ID from event logs
+
+            console.log(`Proposal submitted! ID: ${proposalId}`);
+            return proposalId;
         } catch (error) {
-            console.error("Error minting loot:", error);
+            console.error("Error submitting proposal:", error);
         }
     };
 
@@ -95,10 +96,9 @@ export const Web3Provider = ({ children }) => {
                 contract,
                 provider,
                 signer,
-                mintShares,
-                mintLoot,
                 getTotalShares,
                 getTotalLoot,
+                submitProposal
             }}
         >
             {children}

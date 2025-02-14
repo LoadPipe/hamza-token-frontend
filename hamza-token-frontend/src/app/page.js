@@ -1,45 +1,64 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Heading, Button, VStack, Input, Text } from "@chakra-ui/react";
+import { ethers } from "ethers";
 import { useWeb3 } from "./Web3Context"; // Ensure correct import path
 
 export default function HomePage() {
-    const {
-        account,
-        mintShares,
-        mintLoot,
-        getTotalShares,
-        getTotalLoot,
-        contract
-    } = useWeb3();
+    const { account, getTotalShares, getTotalLoot, contract } = useWeb3();
 
     const [recipient, setRecipient] = useState("");
     const [amount, setAmount] = useState("");
     const [totalShares, setTotalShares] = useState("Loading...");
     const [totalLoot, setTotalLoot] = useState("Loading...");
+    const [loading, setLoading] = useState(false);
+    const [proposalId, setProposalId] = useState(null);
+    const [error, setError] = useState(null);
 
-    // Fetch shares and loot on load
-    React.useEffect(() => {
+    // Fetch shares and loot on component load
+    useEffect(() => {
         const fetchData = async () => {
+            if (!contract) return;
             setTotalShares(await getTotalShares());
             setTotalLoot(await getTotalLoot());
         };
-        if (!contract) return;
         fetchData();
     }, [contract]);
 
-    const handleMintShares = async () => {
-        if (recipient && amount) {
-            await mintShares(recipient, amount);
-            setTotalShares(await getTotalShares()); // Refresh data
-        }
-    };
+    // Handle Proposal Submission
+    const handleSubmitProposal = async () => {
+        if (!contract || !recipient || !amount) return;
+        setLoading(true);
+        setError(null);
 
-    const handleMintLoot = async () => {
-        if (recipient && amount) {
-            await mintLoot(recipient, amount);
-            setTotalLoot(await getTotalLoot()); // Refresh data
+        try {
+            console.log("Submitting proposal...");
+            
+            const proposalData = ethers.AbiCoder.defaultAbiCoder().encode(
+                ["address[]", "uint256[]"],
+                [[recipient], [amount]]
+            );
+
+            const expiration = 0;
+            const baalGas = 300000;
+
+            const tx = await contract.submitProposal(
+                proposalData,
+                expiration,
+                baalGas,
+                "Proposal to deposit funds and receive loot"
+            );
+            const receipt = await tx.wait();
+            const proposalId = receipt.logs[0].args[0]; // Extract proposal ID from event logs
+
+            console.log(`Proposal submitted! ID: ${proposalId}`);
+            setProposalId(proposalId);
+        } catch (err) {
+            console.error("Error submitting proposal:", err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -78,13 +97,16 @@ export default function HomePage() {
                     color="black"
                 />
 
-                {/* Mint Shares & Loot Buttons */}
-                <Button colorScheme="blue" onClick={handleMintShares}>
-                    Mint Shares
+                {/* Submit Proposal Button */}
+                <Button colorScheme="blue" onClick={handleSubmitProposal} isLoading={loading}>
+                    Submit Proposal
                 </Button>
-                <Button colorScheme="green" onClick={handleMintLoot}>
-                    Mint Loot
-                </Button>
+
+                {/* Display Proposal ID if submitted */}
+                {proposalId && <Text fontSize="lg" textColor="green.300">Proposal Submitted! ID: {proposalId}</Text>}
+                
+                {/* Display Error Message */}
+                {error && <Text fontSize="lg" textColor="red.300">Error: {error}</Text>}
             </VStack>
         </Box>
     );
