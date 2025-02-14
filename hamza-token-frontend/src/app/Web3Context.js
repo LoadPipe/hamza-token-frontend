@@ -31,6 +31,7 @@ export const Web3Provider = ({ children }) => {
                     CustomBaalABI,
                     web3Signer
                 );
+                console.log("Contract loaded:", baalContract);
                 setContract(baalContract);
             } else {
                 console.error("No Ethereum wallet detected");
@@ -67,8 +68,8 @@ export const Web3Provider = ({ children }) => {
         if (!contract) return;
         try {
             const totalShares = await contract.totalShares();
-            return formatUnits(totalShares, 18);  
-            
+            console.log("Raw Total Shares:", totalShares.toString()); 
+            return totalShares.toString(); // Return as whole number
         } catch (error) {
             console.error("Error fetching total shares:", error);
         }
@@ -78,11 +79,13 @@ export const Web3Provider = ({ children }) => {
         if (!contract) return;
         try {
             const totalLoot = await contract.totalLoot();
-            return formatUnits(totalLoot, 18);  
+            console.log("Raw Total Loot:", totalLoot.toString()); 
+            return totalLoot.toString(); // Return as whole number
         } catch (error) {
             console.error("Error fetching total loot:", error);
         }
     };
+    
     
 
     return (

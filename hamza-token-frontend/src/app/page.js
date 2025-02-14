@@ -11,6 +11,7 @@ export default function HomePage() {
         mintLoot,
         getTotalShares,
         getTotalLoot,
+        contract
     } = useWeb3();
 
     const [recipient, setRecipient] = useState("");
@@ -24,8 +25,9 @@ export default function HomePage() {
             setTotalShares(await getTotalShares());
             setTotalLoot(await getTotalLoot());
         };
+        if (!contract) return;
         fetchData();
-    }, []);
+    }, [contract]);
 
     const handleMintShares = async () => {
         if (recipient && amount) {
