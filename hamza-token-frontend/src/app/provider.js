@@ -1,6 +1,7 @@
 "use client";
 
 import { ChakraProvider, extendTheme, CSSReset } from "@chakra-ui/react";
+import { Web3Provider } from "./Web3Context";
 
 
 const theme = extendTheme({
@@ -16,9 +17,11 @@ const theme = extendTheme({
 
 const Provider = ({ children }) => {
   return (
-    <ChakraProvider theme={theme}>
-        {children}
-    </ChakraProvider>
+    <Web3Provider>
+      <ChakraProvider theme={theme}>
+          {children}
+      </ChakraProvider>
+    </Web3Provider>
   );
 };
 
