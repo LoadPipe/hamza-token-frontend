@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { ethers, formatUnits } from "ethers";
 
 import CustomBaalABI from "../../abis/CustomBaal_abi.json"; 
+import GNOSIS_SAFE_ABI from "../../abis/GnosisSafe_abi.json";
 
 const Web3Context = createContext();
 
@@ -11,7 +12,8 @@ export const Web3Provider = ({ children }) => {
     const [account, setAccount] = useState(null);
     const [contract, setContract] = useState(null);
 
-    const CONTRACT_ADDRESS = "0x54fe82B58e63C66BaC4398E2B08C3D1276e3231F";
+    const CONTRACT_ADDRESS = "0xDc5Dd2333AAEf13d6dfb691F1C383489b157abAc";
+    const GNOSIS_ADDRESS = "0x09D073aCBC557e60Ceb802f44ef1aE196a490fA7";
 
     useEffect(() => {
         const initWeb3 = async () => {
@@ -56,7 +58,19 @@ export const Web3Provider = ({ children }) => {
                 "Proposal to deposit funds and receive loot"
             );
             const receipt = await tx.wait();
-            const proposalId = receipt.logs[0].args[0]; // Extract proposal ID from event logs
+            console.log("submitProposal receipt:", receipt);
+            // Use event signature to filter logs
+            const eventSignature = contract.interface.getEvent("SubmitProposal").topicHash;
+            const proposalEventLog = receipt.logs.find(log => log.topics[0] === eventSignature);
+
+            if (!proposalEventLog) {
+                console.error("SubmitProposal event not found in logs:", receipt.logs);
+                return;
+            }
+
+            // Decode the log
+            const decodedEvent = contract.interface.parseLog(proposalEventLog);
+            const proposalId = decodedEvent.args[0];
 
             console.log(`Proposal submitted! ID: ${proposalId}`);
             return proposalId;
@@ -86,7 +100,62 @@ export const Web3Provider = ({ children }) => {
             console.error("Error fetching total loot:", error);
         }
     };
-    
+
+    const execSafeTransaction = async (to, value, data) => {
+        if (!signer) {
+            console.error("No signer available");
+            return;
+        }
+
+        // 1. Instantiate the Gnosis Safe contract
+        const safeContract = new ethers.Contract(GNOSIS_ADDRESS, GNOSIS_SAFE_ABI, signer);
+
+        // 2. Construct a "fake" signature for single-sig:
+        const signerAddress = await signer.getAddress();
+        const addressNo0x = signerAddress.replace(/^0x/, "").toLowerCase();
+
+        const r = "0x" + addressNo0x.padStart(64, "0");
+        const s = "0x" + "0".repeat(64);
+        const v = "0x01";
+
+        const signature = ethers.concat([r, s, v]);
+
+        const tx = await safeContract.execTransaction(
+            to,
+            value,
+            data,
+            0,                // operation
+            0,                // safeTxGas
+            0,                // baseGas
+            0,                // gasPrice
+            ethers.ZeroAddress,
+            ethers.ZeroAddress,
+            signature
+        );
+
+        // 4. Wait for confirmation
+        const receipt = await tx.wait();
+        console.log("execTransaction receipt:", receipt);
+        return receipt;
+    };
+
+    const sponsorProposalViaSafe = async (proposalId) => {
+        if (!contract) return;
+        try {
+            // 1. Encode the function call data for `sponsorProposal(uint32)`
+            const baalInterface = contract.interface;
+            const data = baalInterface.encodeFunctionData("sponsorProposal", [
+            proposalId
+            ]);
+
+            // 2. Execute from the Safe 
+            const receipt = await execSafeTransaction(contract.address, 0, data);
+            console.log("Sponsor Proposal via Safe tx:", receipt);
+            return receipt;
+        } catch (error) {
+            console.error("Error sponsoring proposal via Safe:", error);
+        }
+    };
     
 
     return (
@@ -98,7 +167,8 @@ export const Web3Provider = ({ children }) => {
                 signer,
                 getTotalShares,
                 getTotalLoot,
-                submitProposal
+                submitProposal,
+                sponsorProposalViaSafe
             }}
         >
             {children}

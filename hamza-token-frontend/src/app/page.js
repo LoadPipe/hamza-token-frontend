@@ -2,11 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import { Box, Heading, Button, VStack, Input, Text } from "@chakra-ui/react";
-import { ethers } from "ethers";
 import { useWeb3 } from "./Web3Context"; // Ensure correct import path
 
 export default function HomePage() {
-    const { account, getTotalShares, getTotalLoot, contract } = useWeb3();
+    const { 
+        account, 
+        getTotalShares, 
+        getTotalLoot, 
+        contract, 
+        sponsorProposalViaSafe,
+        submitProposal 
+    } = useWeb3();
 
     const [recipient, setRecipient] = useState("");
     const [amount, setAmount] = useState("");
@@ -14,6 +20,7 @@ export default function HomePage() {
     const [totalLoot, setTotalLoot] = useState("Loading...");
     const [loading, setLoading] = useState(false);
     const [proposalId, setProposalId] = useState(null);
+    const [requiresSponsorship, setRequiresSponsorship] = useState(false);
     const [error, setError] = useState(null);
 
     // Fetch shares and loot on component load
@@ -28,34 +35,46 @@ export default function HomePage() {
 
     // Handle Proposal Submission
     const handleSubmitProposal = async () => {
-        if (!contract || !recipient || !amount) return;
+        if (!recipient || !amount) return;
         setLoading(true);
         setError(null);
 
         try {
             console.log("Submitting proposal...");
+
+            const proposalId = await submitProposal(amount, recipient);
             
-            const proposalData = ethers.AbiCoder.defaultAbiCoder().encode(
-                ["address[]", "uint256[]"],
-                [[recipient], [amount]]
-            );
-
-            const expiration = 0;
-            const baalGas = 300000;
-
-            const tx = await contract.submitProposal(
-                proposalData,
-                expiration,
-                baalGas,
-                "Proposal to deposit funds and receive loot"
-            );
-            const receipt = await tx.wait();
-            const proposalId = receipt.logs[0].args[0]; // Extract proposal ID from event logs
+            if (!proposalId) {
+                throw new Error("Proposal ID not found.");
+            }
 
             console.log(`Proposal submitted! ID: ${proposalId}`);
             setProposalId(proposalId);
+
+           
+            setRequiresSponsorship(true);
+
         } catch (err) {
             console.error("Error submitting proposal:", err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle Sponsorship
+    const handleSponsorProposal = async () => {
+        if (!proposalId) return;
+        setLoading(true);
+        setError(null);
+
+        try {
+            console.log(`Sponsoring proposal ${proposalId}...`);
+            await sponsorProposalViaSafe(proposalId);
+            console.log("Proposal sponsored successfully!");
+            setRequiresSponsorship(false);
+        } catch (err) {
+            console.error("Error sponsoring proposal:", err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -101,6 +120,13 @@ export default function HomePage() {
                 <Button colorScheme="blue" onClick={handleSubmitProposal} isLoading={loading}>
                     Submit Proposal
                 </Button>
+
+                {/* Sponsor Proposal Button (Only if required) */}
+                {requiresSponsorship && (
+                    <Button colorScheme="orange" onClick={handleSponsorProposal} isLoading={loading}>
+                        Sponsor Proposal
+                    </Button>
+                )}
 
                 {/* Display Proposal ID if submitted */}
                 {proposalId && <Text fontSize="lg" textColor="green.300">Proposal Submitted! ID: {proposalId}</Text>}
