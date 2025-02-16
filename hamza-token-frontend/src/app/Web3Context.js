@@ -42,10 +42,6 @@ export const Web3Provider = ({ children }) => {
     initWeb3();
   }, []);
 
-  // --- Updated submitProposal ---
-  // This function always encodes a proposal that calls mintLoot with:
-  //  - recipient = connected account
-  //  - amount = 10 loot (using 18 decimals)
   const submitProposal = async (expiration = 0, baalGas = 300000) => {
     if (!contract || !account) return;
     try {
@@ -203,22 +199,21 @@ export const Web3Provider = ({ children }) => {
     }
   };
 
-  // --- Updated processProposal ---
-  // This function automatically re-encodes the call to mintLoot with 10 loot for the connected account.
-  const processProposal = async (proposalId) => {
-    if (!contract || !account) return;
-    try {
-      console.log("Processing proposal", proposalId);
-      const lootAmount = ethers.parseUnits("10", 18);
-      const proposalData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
-      const tx = await contract.processProposal(proposalId, proposalData);
-      const receipt = await tx.wait();
-      console.log("Process Proposal receipt:", receipt);
-      return receipt;
-    } catch (error) {
-      console.error("Error processing proposal:", error);
-    }
-  };
+ 
+    const processProposal = async (proposalId) => {
+        if (!contract || !account) return;
+        try {
+            console.log("Processing proposal", proposalId);
+            const lootAmount = ethers.parseUnits("10", 18);
+            const proposalData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
+            const data = contract.interface.encodeFunctionData("processProposal", [proposalId, proposalData]);
+            const receipt = await execSafeTransaction(CONTRACT_ADDRESS, 0, data);
+            console.log("Process Proposal via Safe receipt:", receipt);
+            return receipt;
+        } catch (error) {
+            console.error("Error processing proposal via Safe:", error);
+        }
+    };
 
   return (
     <Web3Context.Provider
