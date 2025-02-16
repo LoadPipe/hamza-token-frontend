@@ -1,32 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Box,
-  Heading,
-  Button,
-  VStack,
-  Input,
-  Text,
-  HStack
-} from "@chakra-ui/react";
-import { useWeb3 } from "./Web3Context"; // Ensure correct import path
+import { Box, Heading, Button, VStack, Text, HStack } from "@chakra-ui/react";
+import { useWeb3 } from "./Web3Context";
 
 export default function HomePage() {
   const {
     account,
     getTotalShares,
     getTotalLoot,
-    contract,
     sponsorProposalViaSafe,
     submitProposal,
     submitVote,
     getAllProposals,
-    getProposalState
+    getProposalState,
+    processProposal
   } = useWeb3();
 
-  const [recipient, setRecipient] = useState("");
-  const [amount, setAmount] = useState("");
   const [totalShares, setTotalShares] = useState("Loading...");
   const [totalLoot, setTotalLoot] = useState("Loading...");
   const [loading, setLoading] = useState(false);
@@ -35,22 +25,21 @@ export default function HomePage() {
   const [error, setError] = useState(null);
   const [proposals, setProposals] = useState([]);
 
-  // Fetch shares and loot on component load
+  // Fetch total shares and loot on load
   useEffect(() => {
     const fetchData = async () => {
-      if (!contract) return;
+      if (!account) return;
       setTotalShares(await getTotalShares());
       setTotalLoot(await getTotalLoot());
     };
     fetchData();
-  }, [contract, getTotalShares, getTotalLoot]);
+  }, [account, getTotalShares, getTotalLoot]);
 
   // Load proposals from the contract
   const loadProposals = async () => {
-    if (!contract) return;
+    if (!account) return;
     try {
       const allProposals = await getAllProposals();
-      // Map proposals to include state and convert BigNumbers to strings/numbers
       const proposalsWithState = await Promise.all(
         allProposals.map(async (prop) => {
           const state = await getProposalState(prop.id);
@@ -71,22 +60,20 @@ export default function HomePage() {
 
   useEffect(() => {
     loadProposals();
-  }, [contract]);
+  }, [account]);
 
-  // Handle Proposal Submission
+  // Handle Proposal Submission (always submits a proposal to mint 10 loot to self)
   const handleSubmitProposal = async () => {
-    if (!recipient || !amount) return;
     setLoading(true);
     setError(null);
-
     try {
-      console.log("Submitting proposal...");
-      const proposalId = await submitProposal(amount, recipient);
-      if (!proposalId) {
+      console.log("Submitting proposal to mint 10 loot to self...");
+      const id = await submitProposal();
+      if (!id) {
         throw new Error("Proposal ID not found.");
       }
-      console.log(`Proposal submitted! ID: ${proposalId}`);
-      setProposalId(proposalId);
+      console.log(`Proposal submitted! ID: ${id}`);
+      setProposalId(id);
       setRequiresSponsorship(true);
       await loadProposals();
     } catch (err) {
@@ -102,7 +89,6 @@ export default function HomePage() {
     if (!proposalId) return;
     setLoading(true);
     setError(null);
-
     try {
       console.log(`Sponsoring proposal ${proposalId}...`);
       await sponsorProposalViaSafe(proposalId);
@@ -121,7 +107,6 @@ export default function HomePage() {
   const handleVote = async (id, support) => {
     setLoading(true);
     setError(null);
-
     try {
       console.log(`Voting on proposal ${id} with support: ${support}`);
       await submitVote(id, support);
@@ -129,6 +114,23 @@ export default function HomePage() {
       await loadProposals();
     } catch (err) {
       console.error("Error submitting vote:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Processing a proposal (automatically re-encodes the call to mintLoot for 10 loot to self)
+  const handleProcessProposal = async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log(`Processing proposal ${id}...`);
+      await processProposal(id);
+      console.log("Proposal processed successfully!");
+      await loadProposals();
+    } catch (err) {
+      console.error("Error processing proposal:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -149,7 +151,6 @@ export default function HomePage() {
           Hamza Token Frontend
         </Heading>
 
-        {/* Display Connected Account */}
         {account ? (
           <Text fontSize="lg" textColor="white">
             Connected Wallet: {account}
@@ -160,7 +161,6 @@ export default function HomePage() {
           </Text>
         )}
 
-        {/* Display total shares and loot */}
         <Text fontSize="lg" textColor="white">
           Total Shares: {totalShares}
         </Text>
@@ -168,43 +168,30 @@ export default function HomePage() {
           Total Loot: {totalLoot}
         </Text>
 
-        {/* Inputs for recipient and amount */}
-        <Input
-          placeholder="Recipient Address"
-          value={recipient}
-          onChange={(e) => setRecipient(e.target.value)}
-          bg="white"
-          color="black"
-        />
-        <Input
-          type="number"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          bg="white"
-          color="black"
-        />
-
-        {/* Submit Proposal Button */}
-        <Button colorScheme="blue" onClick={handleSubmitProposal} isLoading={loading}>
-          Submit Proposal
+        <Button
+          colorScheme="blue"
+          onClick={handleSubmitProposal}
+          isLoading={loading}
+        >
+          Submit Proposal for 10 Loot
         </Button>
 
-        {/* Sponsor Proposal Button (Only if required) */}
         {requiresSponsorship && (
-          <Button colorScheme="orange" onClick={handleSponsorProposal} isLoading={loading}>
+          <Button
+            colorScheme="orange"
+            onClick={handleSponsorProposal}
+            isLoading={loading}
+          >
             Sponsor Proposal
           </Button>
         )}
 
-        {/* Display Proposal ID if submitted */}
         {proposalId && (
           <Text fontSize="lg" textColor="green.300">
             Proposal Submitted! ID: {proposalId}
           </Text>
         )}
 
-        {/* Display Error Message */}
         {error && (
           <Text fontSize="lg" textColor="red.300">
             Error: {error}
@@ -212,7 +199,6 @@ export default function HomePage() {
         )}
       </VStack>
 
-      {/* Proposals List */}
       <Box width="80%" bg="gray.800" p={5} borderRadius="md">
         <Heading as="h2" size="lg" textColor="white" mb={4}>
           Proposals
@@ -224,7 +210,13 @@ export default function HomePage() {
           <Text textColor="white">No proposals found.</Text>
         ) : (
           proposals.map((proposal) => (
-            <Box key={proposal.id} bg="gray.700" p={4} mb={2} borderRadius="md">
+            <Box
+              key={proposal.id}
+              bg="gray.700"
+              p={4}
+              mb={2}
+              borderRadius="md"
+            >
               <Text textColor="white">ID: {proposal.id}</Text>
               <Text textColor="white">Sponsor: {proposal.sponsor}</Text>
               <Text textColor="white">Yes Votes: {proposal.yesVotes}</Text>
@@ -247,6 +239,16 @@ export default function HomePage() {
                     Vote No
                   </Button>
                 </HStack>
+              )}
+              {proposal.state === "Ready" && (
+                <Button
+                  colorScheme="purple"
+                  mt={2}
+                  onClick={() => handleProcessProposal(proposal.id)}
+                  isLoading={loading}
+                >
+                  Process Proposal
+                </Button>
               )}
             </Box>
           ))
