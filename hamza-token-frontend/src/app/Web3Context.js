@@ -148,14 +148,85 @@ export const Web3Provider = ({ children }) => {
             proposalId
             ]);
 
-            // 2. Execute from the Safe 
-            const receipt = await execSafeTransaction(contract.address, 0, data);
+            // 2. Execute from the Safe             
+            const receipt = await execSafeTransaction(CONTRACT_ADDRESS, 0, data);
             console.log("Sponsor Proposal via Safe tx:", receipt);
             return receipt;
         } catch (error) {
             console.error("Error sponsoring proposal via Safe:", error);
         }
     };
+
+    const submitVote = async (proposalId, support) => {
+        if (!contract) return;
+        try {
+            console.log("Submitting vote...");
+            // Encode the function call data for `submitVote(uint32, bool)`
+            const baalInterface = contract.interface;
+            const data = baalInterface.encodeFunctionData("submitVote", [
+                proposalId,
+                support
+            ]);
+
+            // Execute from the Safe
+            const receipt = await execSafeTransaction(CONTRACT_ADDRESS, 0, data);
+            console.log("Submit Vote via Safe tx:", receipt);
+            return receipt;
+        } catch (error) {
+            console.error("Error submitting vote via Safe:", error);
+        }
+    };
+
+    const getProposalCount = async () => {
+        if (!contract) return 0;
+        try {
+          const count = await contract.proposalCount();
+          return Number(count);
+        } catch (error) {
+          console.error("Error fetching proposal count:", error);
+          return 0;
+        }
+      };
+    
+      // Get all proposals by iterating from 1 to proposalCount
+      const getAllProposals = async () => {
+        if (!contract) return [];
+        try {
+          const count = await getProposalCount();
+          const proposals = [];
+          for (let i = 1; i <= count; i++) {
+            const prop = await contract.proposals(i);
+            proposals.push(prop);
+          }
+          return proposals;
+        } catch (error) {
+          console.error("Error fetching proposals:", error);
+          return [];
+        }
+      };
+    
+      // Get a human-readable state for a given proposal ID
+      const getProposalState = async (proposalId) => {
+        if (!contract) return "Unknown";
+        try {
+          const stateVal = await contract.state(proposalId);
+            const num = Number(stateVal);
+          const mapping = [
+            "Unborn",
+            "Submitted",
+            "Voting",
+            "Cancelled",
+            "Grace",
+            "Ready",
+            "Processed",
+            "Defeated"
+          ];
+          return mapping[num] || "Unknown";
+        } catch (error) {
+          console.error("Error fetching proposal state:", error);
+          return "Unknown";
+        }
+      };
     
 
     return (
@@ -168,7 +239,11 @@ export const Web3Provider = ({ children }) => {
                 getTotalShares,
                 getTotalLoot,
                 submitProposal,
-                sponsorProposalViaSafe
+                sponsorProposalViaSafe,
+                submitVote,
+                getProposalCount,
+                getAllProposals,
+                getProposalState
             }}
         >
             {children}
