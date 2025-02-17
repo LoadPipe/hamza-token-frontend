@@ -14,6 +14,7 @@ export const Web3Provider = ({ children }) => {
 
   const CONTRACT_ADDRESS = "0xeB6b7AEc2cdC0af08Dc5a09168748b4965D657Ce";
   const GNOSIS_ADDRESS = "0xac452A8F05b5C82F08a686327Bc10d67274B403E";
+  const BAAL_SAFE = "0x493719077761DD6c06cd9055d85F2E5ABf368598"
 
   useEffect(() => {
     const initWeb3 = async () => {

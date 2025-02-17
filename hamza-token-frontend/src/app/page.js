@@ -20,8 +20,6 @@ export default function HomePage() {
   const [totalShares, setTotalShares] = useState("Loading...");
   const [totalLoot, setTotalLoot] = useState("Loading...");
   const [loading, setLoading] = useState(false);
-  const [proposalId, setProposalId] = useState(null);
-  const [requiresSponsorship, setRequiresSponsorship] = useState(false);
   const [error, setError] = useState(null);
   const [proposals, setProposals] = useState([]);
 
@@ -62,19 +60,14 @@ export default function HomePage() {
     loadProposals();
   }, [account]);
 
-  // Handle Proposal Submission (always submits a proposal to mint 10 loot to self)
+  // Handle Proposal Submission (submits a proposal to mint 10 loot to self)
   const handleSubmitProposal = async () => {
     setLoading(true);
     setError(null);
     try {
       console.log("Submitting proposal to mint 10 loot to self...");
-      const id = await submitProposal();
-      if (!id) {
-        throw new Error("Proposal ID not found.");
-      }
-      console.log(`Proposal submitted! ID: ${id}`);
-      setProposalId(id);
-      setRequiresSponsorship(true);
+      await submitProposal();
+      console.log(`Proposal submitted!`);
       await loadProposals();
     } catch (err) {
       console.error("Error submitting proposal:", err);
@@ -84,16 +77,14 @@ export default function HomePage() {
     }
   };
 
-  // Handle Sponsorship
-  const handleSponsorProposal = async () => {
-    if (!proposalId) return;
+  // Handle Sponsorship for a specific proposal
+  const handleSponsorProposal = async (id) => {
     setLoading(true);
     setError(null);
     try {
-      console.log(`Sponsoring proposal ${proposalId}...`);
-      await sponsorProposalViaSafe(proposalId);
+      console.log(`Sponsoring proposal ${id}...`);
+      await sponsorProposalViaSafe(id);
       console.log("Proposal sponsored successfully!");
-      setRequiresSponsorship(false);
       await loadProposals();
     } catch (err) {
       console.error("Error sponsoring proposal:", err);
@@ -176,22 +167,6 @@ export default function HomePage() {
           Submit Proposal for 10 Loot
         </Button>
 
-        {requiresSponsorship && (
-          <Button
-            colorScheme="orange"
-            onClick={handleSponsorProposal}
-            isLoading={loading}
-          >
-            Sponsor Proposal
-          </Button>
-        )}
-
-        {proposalId && (
-          <Text fontSize="lg" textColor="green.300">
-            Proposal Submitted! ID: {proposalId}
-          </Text>
-        )}
-
         {error && (
           <Text fontSize="lg" textColor="red.300">
             Error: {error}
@@ -222,6 +197,19 @@ export default function HomePage() {
               <Text textColor="white">Yes Votes: {proposal.yesVotes}</Text>
               <Text textColor="white">No Votes: {proposal.noVotes}</Text>
               <Text textColor="white">State: {proposal.state}</Text>
+
+              {/* Show sponsor button if proposal state is "Submitted" */}
+              {proposal.state === "Submitted" && (
+                <Button
+                  colorScheme="orange"
+                  mt={2}
+                  onClick={() => handleSponsorProposal(proposal.id)}
+                  isLoading={loading}
+                >
+                  Sponsor Proposal
+                </Button>
+              )}
+
               {proposal.state === "Voting" && (
                 <HStack spacing={4} mt={2}>
                   <Button
@@ -240,6 +228,7 @@ export default function HomePage() {
                   </Button>
                 </HStack>
               )}
+
               {proposal.state === "Ready" && (
                 <Button
                   colorScheme="purple"
