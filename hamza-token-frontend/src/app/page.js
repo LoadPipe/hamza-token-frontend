@@ -12,6 +12,7 @@ export default function HomePage() {
     sponsorProposalViaSafe,
     submitProposal,
     submitVote,
+    cancelProposalViaSafe,
     getAllProposals,
     getProposalState,
     processProposal
@@ -66,8 +67,8 @@ export default function HomePage() {
     setError(null);
     try {
       console.log("Submitting proposal to mint 10 loot to self...");
-      await submitProposal();
-      console.log(`Proposal submitted!`);
+      const { proposalId, proposalData } = await submitProposal();
+      console.log(`Proposal submitted! ID: ${proposalId}`);
       await loadProposals();
     } catch (err) {
       console.error("Error submitting proposal:", err);
@@ -111,13 +112,30 @@ export default function HomePage() {
     }
   };
 
-  // Handle Processing a proposal (automatically re-encodes the call to mintLoot for 10 loot to self)
-  const handleProcessProposal = async (id) => {
+  // Handle Cancelling a proposal (only allowed during Voting state)
+  const handleCancelProposal = async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log(`Cancelling proposal ${id}...`);
+      await cancelProposalViaSafe(id);
+      console.log("Proposal cancelled successfully!");
+      await loadProposals();
+    } catch (err) {
+      console.error("Error cancelling proposal:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Processing a proposal (if ready)
+  const handleProcessProposal = async (id, proposalData) => {
     setLoading(true);
     setError(null);
     try {
       console.log(`Processing proposal ${id}...`);
-      await processProposal(id);
+      await processProposal(id, proposalData);
       console.log("Proposal processed successfully!");
       await loadProposals();
     } catch (err) {
@@ -211,22 +229,34 @@ export default function HomePage() {
               )}
 
               {proposal.state === "Voting" && (
-                <HStack spacing={4} mt={2}>
-                  <Button
-                    colorScheme="green"
-                    onClick={() => handleVote(proposal.id, true)}
-                    isLoading={loading}
-                  >
-                    Vote Yes
-                  </Button>
-                  <Button
-                    colorScheme="red"
-                    onClick={() => handleVote(proposal.id, false)}
-                    isLoading={loading}
-                  >
-                    Vote No
-                  </Button>
-                </HStack>
+                <>
+                  <HStack spacing={4} mt={2}>
+                    <Button
+                      colorScheme="green"
+                      onClick={() => handleVote(proposal.id, true)}
+                      isLoading={loading}
+                    >
+                      Vote Yes
+                    </Button>
+                    <Button
+                      colorScheme="red"
+                      onClick={() => handleVote(proposal.id, false)}
+                      isLoading={loading}
+                    >
+                      Vote No
+                    </Button>
+                  </HStack>
+                  {proposal.sponsor.toLowerCase() === account.toLowerCase() && (
+                    <Button
+                      colorScheme="yellow"
+                      mt={2}
+                      onClick={() => handleCancelProposal(proposal.id)}
+                      isLoading={loading}
+                    >
+                      Cancel Proposal
+                    </Button>
+                  )}
+                </>
               )}
 
               {proposal.state === "Ready" && (

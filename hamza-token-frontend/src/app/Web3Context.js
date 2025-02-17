@@ -47,12 +47,19 @@ export const Web3Provider = ({ children }) => {
     if (!contract || !account) return;
     try {
       console.log("Submitting proposal: mintLoot to self for 10 loot...");
-      const lootAmount = ethers.parseUnits("10", 18);
-      // Encode the function call to mintLoot using the contract interface.
-      const proposalData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
-      
+        // 1. Encode the mintLoot call
+        const lootAmount = ethers.parseUnits("10", 18);
+        const mintLootData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
+
+        // 2. Wrap that call in an executeAsBaal call
+        const executeAsBaalData = contract.interface.encodeFunctionData("executeAsBaal", [
+        CONTRACT_ADDRESS, 
+        0,           
+        mintLootData   
+        ]);
+
       const tx = await contract.submitProposal(
-        proposalData,
+        executeAsBaalData,
         expiration,
         baalGas,
         "Proposal to mint 10 loot to submitter"
@@ -205,16 +212,43 @@ export const Web3Provider = ({ children }) => {
         if (!contract || !account) return;
         try {
             console.log("Processing proposal", proposalId);
+            // 1. Encode the mintLoot call
             const lootAmount = ethers.parseUnits("10", 18);
-            const proposalData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
-            const data = contract.interface.encodeFunctionData("processProposal", [proposalId, proposalData]);
-            const receipt = await execSafeTransaction(CONTRACT_ADDRESS, 0, data);
-            console.log("Process Proposal via Safe receipt:", receipt);
+            const mintLootData = contract.interface.encodeFunctionData("mintLoot", [[account], [lootAmount]]);
+
+            // 2. Wrap that call in an executeAsBaal call
+            const executeAsBaalData = contract.interface.encodeFunctionData("executeAsBaal", [
+            CONTRACT_ADDRESS,
+            0,              
+            mintLootData    
+            ]);
+
+            // 3. Encode processProposal so that it will execute 
+            const data = contract.interface.encodeFunctionData("processProposal", [
+            proposalId,
+            executeAsBaalData
+            ]);
+
+            const tx = await contract.processProposal(proposalId, data);
+            const receipt = await tx.wait();
+            console.log("Process Proposal:", receipt);
             return receipt;
         } catch (error) {
-            console.error("Error processing proposal via Safe:", error);
+            console.error("Error processing proposal:", error);
         }
     };
+
+    const cancelProposalViaSafe = async (proposalId) => {
+        if (!contract) return;
+        try {
+          const data = contract.interface.encodeFunctionData("cancelProposal", [proposalId]);
+          const receipt = await execSafeTransaction(CONTRACT_ADDRESS, 0, data);
+          console.log("Cancel Proposal via Safe tx:", receipt);
+          return receipt;
+        } catch (error) {
+          console.error("Error cancelling proposal via Safe:", error);
+        }
+      };
 
   return (
     <Web3Context.Provider
@@ -231,7 +265,8 @@ export const Web3Provider = ({ children }) => {
         getProposalCount,
         getAllProposals,
         getProposalState,
-        processProposal
+        processProposal,
+        cancelProposalViaSafe
       }}
     >
       {children}
