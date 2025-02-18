@@ -12,9 +12,8 @@ export const Web3Provider = ({ children }) => {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
 
-  const CONTRACT_ADDRESS = "0xeB6b7AEc2cdC0af08Dc5a09168748b4965D657Ce";
-  const GNOSIS_ADDRESS = "0xac452A8F05b5C82F08a686327Bc10d67274B403E";
-  const BAAL_SAFE = "0x493719077761DD6c06cd9055d85F2E5ABf368598"
+  const CONTRACT_ADDRESS = "0xA8826A2e8d31Db2229077aEB5d7c946A128F1d38";
+  const GNOSIS_ADDRESS = "0x0a65dBAD1f7E2678F15c8E154A157a11358D7218";
 
   useEffect(() => {
     const initWeb3 = async () => {
@@ -223,13 +222,7 @@ export const Web3Provider = ({ children }) => {
             mintLootData    
             ]);
 
-            // 3. Encode processProposal so that it will execute 
-            const data = contract.interface.encodeFunctionData("processProposal", [
-            proposalId,
-            executeAsBaalData
-            ]);
-
-            const tx = await contract.processProposal(proposalId, data);
+            const tx = await contract.processProposal(proposalId, executeAsBaalData);
             const receipt = await tx.wait();
             console.log("Process Proposal:", receipt);
             return receipt;
