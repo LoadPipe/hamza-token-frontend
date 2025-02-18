@@ -1,0 +1,28 @@
+{
+  "name": "hamza-token-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "2.1.1",
+    "@chakra-ui/next-js": "^2.4.2",
+    "@chakra-ui/react": "2.8.2",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "ethers": "^6.13.5",
+    "framer-motion": "^12.4.3",
+    "next": "15.1.7",
+    "next-themes": "^0.4.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.8",
+    "typescript": "5.7.3"
+  }
+}
