@@ -12,8 +12,8 @@ export const Web3Provider = ({ children }) => {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
 
-  const CONTRACT_ADDRESS = "0xA8826A2e8d31Db2229077aEB5d7c946A128F1d38";
-  const GNOSIS_ADDRESS = "0x0a65dBAD1f7E2678F15c8E154A157a11358D7218";
+  const CONTRACT_ADDRESS = "0xbBd8e10C7bA88E9018BB8867C14f2A026E321DcD";
+  const GNOSIS_ADDRESS = "0x7F1acb9eE8155BcD40e9090Fe182A970775B01D4";
 
   useEffect(() => {
     const initWeb3 = async () => {
@@ -42,7 +42,7 @@ export const Web3Provider = ({ children }) => {
     initWeb3();
   }, []);
 
-  const submitProposal = async (expiration = 0, baalGas = 300000) => {
+  const submitProposal = async (expiration = 0, baalGas = 1500000) => {
     if (!contract || !account) return;
     try {
       console.log("Submitting proposal: mintLoot to self for 10 loot...");
@@ -57,8 +57,13 @@ export const Web3Provider = ({ children }) => {
         mintLootData   
         ]);
 
+        const multisendPayload = await contract.encodeMultisend(
+          [mintLootData],        // array of calls
+          CONTRACT_ADDRESS       // target address for each call (usually your Baal contract address)
+        );
+
       const tx = await contract.submitProposal(
-        executeAsBaalData,
+        multisendPayload,
         expiration,
         baalGas,
         "Proposal to mint 10 loot to submitter"
@@ -97,8 +102,9 @@ export const Web3Provider = ({ children }) => {
     if (!contract) return;
     try {
       const totalLoot = await contract.totalLoot();
-      console.log("Raw Total Loot:", totalLoot.toString()); 
-      return totalLoot.toString();
+      const parsedLoot = ethers.formatUnits(totalLoot, 18);
+      console.log("Raw Total Loot:", parsedLoot); 
+      return parsedLoot
     } catch (error) {
       console.error("Error fetching total loot:", error);
     }
@@ -222,7 +228,12 @@ export const Web3Provider = ({ children }) => {
             mintLootData    
             ]);
 
-            const tx = await contract.processProposal(proposalId, executeAsBaalData);
+            const multisendPayload = await contract.encodeMultisend(
+              [mintLootData],        // array of calls
+              CONTRACT_ADDRESS       // target address for each call (usually your Baal contract address)
+            );
+
+            const tx = await contract.processProposal(proposalId, multisendPayload);
             const receipt = await tx.wait();
             console.log("Process Proposal:", receipt);
             return receipt;
