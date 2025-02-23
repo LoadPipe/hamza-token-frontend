@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 
 import CustomBaalABI from "../../abis/CustomBaal_abi.json"; 
 import GNOSIS_SAFE_ABI from "../../abis/GnosisSafe_abi.json";
+import ERC20_ABI from "../../abis/ERC20_abi.json"
 
 const Web3Context = createContext();
 
@@ -12,8 +13,8 @@ export const Web3Provider = ({ children }) => {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
 
-  const CONTRACT_ADDRESS = "0xbBd8e10C7bA88E9018BB8867C14f2A026E321DcD";
-  const GNOSIS_ADDRESS = "0x7F1acb9eE8155BcD40e9090Fe182A970775B01D4";
+  const CONTRACT_ADDRESS = "0x3410CA83D5902043C2C24760851033D304e94CF9"; // Baal contract
+  const GNOSIS_ADDRESS = "0xDD9f9570c2a8f8EB6a2aE001c224E226d77F0b63"; // hats admin multisig
 
   useEffect(() => {
     const initWeb3 = async () => {
@@ -254,6 +255,66 @@ export const Web3Provider = ({ children }) => {
         }
       };
 
+    const getUserLootBalance = async (userAddress) => {
+      if (!contract || !provider) return "0";
+      try {
+        const lootTokenAddress = await contract.lootToken();
+        const lootContract = new ethers.Contract(lootTokenAddress, ERC20_ABI, provider);
+        const balance = await lootContract.balanceOf(userAddress);
+
+        return ethers.formatUnits(balance, 18);
+      } catch (error) {
+        console.error("Error fetching user loot balance:", error);
+        return "0";
+      }
+    };
+
+    const getUserSharesBalance = async (userAddress) => {
+      if (!contract || !provider) return "0";
+      try {
+        const sharesTokenAddress = await contract.sharesToken();
+        const sharesContract = new ethers.Contract(sharesTokenAddress, ERC20_ABI, provider);
+        const balance = await sharesContract.balanceOf(userAddress);
+        return ethers.formatUnits(balance, 18);
+      } catch (error) {
+        console.error("Error fetching user shares balance:", error);
+        return "0";
+      }
+    };
+
+    const getBaalConfig = async () => {
+      if (!contract) return null;
+      try {
+        const votingPeriod = await contract.votingPeriod();
+        const gracePeriod = await contract.gracePeriod();
+        const proposalOffering = await contract.proposalOffering();
+        const quorumPercent = await contract.quorumPercent();
+        const sponsorThreshold = await contract.sponsorThreshold();
+        const minRetentionPercent = await contract.minRetentionPercent();
+        const adminLock = await contract.adminLock();
+        const managerLock = await contract.managerLock();
+        const governorLock = await contract.governorLock();
+        const communityVault = await contract.communityVault();
+
+        return {
+          votingPeriod: votingPeriod.toString(),
+          gracePeriod: gracePeriod.toString(),
+          proposalOffering: proposalOffering.toString(),
+          quorumPercent: quorumPercent.toString(),
+          sponsorThreshold: sponsorThreshold.toString(),
+          minRetentionPercent: minRetentionPercent.toString(),
+          adminLock,
+          managerLock,
+          governorLock,
+          communityVault
+        };
+      } catch (error) {
+        console.error("Error fetching Baal config:", error);
+        return null;
+      }
+    };
+
+
   return (
     <Web3Context.Provider
       value={{
@@ -270,7 +331,10 @@ export const Web3Provider = ({ children }) => {
         getAllProposals,
         getProposalState,
         processProposal,
-        cancelProposalViaSafe
+        cancelProposalViaSafe,
+        getUserLootBalance,
+        getUserSharesBalance,
+        getBaalConfig
       }}
     >
       {children}
