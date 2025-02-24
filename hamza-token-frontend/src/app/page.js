@@ -545,7 +545,11 @@ export default function HomePage() {
                             </Text>
                         )}
                         <Text fontSize="lg" textColor="white">
-                            Total Governance Token: {userGovernanceTokenBalance}
+                            Your Loot Balance: {userLootBalance}
+                        </Text>
+                        <Text fontSize="lg" textColor="white">
+                            Your Governance Balance:{' '}
+                            {userGovernanceTokenBalance}
                         </Text>
 
                         <input
