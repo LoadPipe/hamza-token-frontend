@@ -40,6 +40,7 @@ export default function HomePage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [proposals, setProposals] = useState([]);
+    const [govTokenWrapAmount, setGovTokenWrapAmount] = useState('0');
 
     // Baal config data
     const [baalConfig, setBaalConfig] = useState(null);
@@ -227,7 +228,7 @@ export default function HomePage() {
     const handleWrapGovToken = async () => {
         setLoading(true);
         setError(null);
-        const amount = 1;
+        const amount = parseFloat(govTokenWrapAmount);
         try {
             console.log('Wrapping ', amount, 'governance token...');
             const newAmount = await wrapGovernanceToken(amount);
@@ -238,6 +239,18 @@ export default function HomePage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const sanitizeNumber = (input) => {
+        let sanitized = input.replace(/[^0-9.]/g, '');
+        const firstDecimalIndex = sanitized.indexOf('.');
+        if (firstDecimalIndex !== -1) {
+            sanitized =
+                sanitized.substring(0, firstDecimalIndex + 1) +
+                sanitized.substring(firstDecimalIndex + 1).replace(/\./g, '');
+        }
+
+        return sanitized;
     };
 
     return (
@@ -534,12 +547,25 @@ export default function HomePage() {
                         <Text fontSize="lg" textColor="white">
                             Total Governance Token: {userGovernanceTokenBalance}
                         </Text>
+
+                        <input
+                            type="text"
+                            value={govTokenWrapAmount}
+                            onChange={(e) => {
+                                setGovTokenWrapAmount(
+                                    sanitizeNumber(e.target.value)
+                                );
+                            }}
+                            style={{ color: 'black' }}
+                            className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="amount to wrap"
+                        />
                         <Button
                             colorScheme="blue"
                             onClick={handleWrapGovToken}
                             isLoading={loading}
                         >
-                            Wrap 1 Governance Token
+                            Wrap {govTokenWrapAmount} Governance Token
                         </Button>
 
                         {/* Display errors */}

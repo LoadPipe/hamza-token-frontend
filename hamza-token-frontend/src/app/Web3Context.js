@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { ethers } from 'ethers';
+import { ethers, parseEther, parseUnits } from 'ethers';
 
 import CustomBaalABI from '../../abis/CustomBaal_abi.json';
 import GNOSIS_SAFE_ABI from '../../abis/GnosisSafe_abi.json';
@@ -311,9 +311,13 @@ export const Web3Provider = ({ children }) => {
     const wrapGovernanceToken = async (amount) => {
         if (!govTokenContract) return;
         try {
-            const amountInWei =
-                BigInt(amount.toString()) *
-                BigInt(10) ** BigInt(await govTokenContract.decimals());
+            const amountInWei = BigInt(
+                parseUnits(
+                    amount.toString(),
+                    parseInt(await govTokenContract.decimals())
+                )
+            );
+            console.log('amount to wrap: ', amountInWei);
 
             const lootToken = new ethers.Contract(
                 await contract.lootToken(),
@@ -381,7 +385,7 @@ export const Web3Provider = ({ children }) => {
             const balance = await govTokenContract.balanceOf(userAddress);
             return ethers.formatUnits(
                 balance,
-                await govTokenContract.decimals()
+                parseInt(await govTokenContract.decimals())
             );
         } catch (error) {
             console.error(
