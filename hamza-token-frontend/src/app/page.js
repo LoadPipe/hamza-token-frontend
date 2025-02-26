@@ -18,15 +18,16 @@ export default function HomePage() {
         getTotalShares,
         getTotalLoot,
         sponsorProposalViaSafe,
-        submitProposal,
-        submitVote,
+        submitLootProposal,
+        submitBaalVote,
         cancelProposalViaSafe,
         wrapGovernanceToken,
-        getAllProposals,
-        getProposalState,
-        processProposal,
+        getAllBaalProposals,
+        getBaalProposalState,
+        processBaalProposal,
         getUserLootBalance,
         getUserSharesBalance,
+        submitFeeProposal,
         getUserGovernanceTokenBalance,
         getBaalConfig,
     } = useWeb3();
@@ -106,10 +107,10 @@ export default function HomePage() {
         if (!account) return;
         try {
             setLoading(true);
-            const allProposals = await getAllProposals();
+            const allProposals = await getAllBaalProposals();
             const proposalsWithState = await Promise.all(
                 allProposals.map(async (prop) => {
-                    const state = await getProposalState(prop.id);
+                    const state = await getBaalProposalState(prop.id);
                     return {
                         id: prop.id.toString(),
                         sponsor: prop.sponsor,
@@ -136,12 +137,12 @@ export default function HomePage() {
     // Handlers
     // -----------------------------
     // Submit a new proposal (mints 10 loot to self)
-    const handleSubmitProposal = async () => {
+    const handleSubmitLootProposal = async () => {
         setLoading(true);
         setError(null);
         try {
             console.log('Submitting proposal to mint 10 loot to self...');
-            const proposalId = await submitProposal();
+            const proposalId = await submitLootProposal();
             if (!proposalId) {
                 console.warn('No proposal ID returned or event was not found.');
             } else {
@@ -179,7 +180,7 @@ export default function HomePage() {
         setError(null);
         try {
             console.log(`Voting on proposal ${id}: support = ${support}`);
-            await submitVote(id, support);
+            await submitBaalVote(id, support);
             console.log('Vote submitted successfully!');
             await loadProposals();
         } catch (err) {
@@ -208,12 +209,12 @@ export default function HomePage() {
     };
 
     // Process a proposal
-    const handleProcessProposal = async (id) => {
+    const handleProcessLootProposal = async (id) => {
         setLoading(true);
         setError(null);
         try {
             console.log(`Processing proposal ${id}...`);
-            await processProposal(id);
+            await processBaalProposal(id);
             console.log('Proposal processed successfully!');
             await loadProposals();
         } catch (err) {
@@ -241,6 +242,30 @@ export default function HomePage() {
         }
     };
 
+    // Handlers
+    // -----------------------------
+    // Submit a new proposal to change fee
+    const handleSubmitFeeProposal = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            console.log('Submitting proposal to mint 10 loot to self...');
+            const proposalId = await submitFeeProposal();
+            if (!proposalId) {
+                console.warn('No proposal ID returned or event was not found.');
+            } else {
+                console.log(`Proposal submitted! ID: ${proposalId}`);
+                await loadProposals();
+            }
+        } catch (err) {
+            console.error('Error submitting proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Ensures that input is numeric by stripping out non-numerics
     const sanitizeNumber = (input) => {
         let sanitized = input.replace(/[^0-9.]/g, '');
         const firstDecimalIndex = sanitized.indexOf('.');
@@ -284,6 +309,12 @@ export default function HomePage() {
                     onClick={() => setViewMode('wrap-gov')}
                 >
                     Wrap Governance Token
+                </Button>
+                <Button
+                    colorScheme={viewMode === 'fee' ? 'blue' : 'gray'}
+                    onClick={() => setViewMode('fee')}
+                >
+                    Set Fee
                 </Button>
             </HStack>
             {/* Conditionally render either "User Info" or "Baal Info" */}
@@ -331,7 +362,7 @@ export default function HomePage() {
                         </Text>
                         <Button
                             colorScheme="blue"
-                            onClick={handleSubmitProposal}
+                            onClick={handleSubmitLootProposal}
                             isLoading={loading}
                         >
                             Submit Proposal for 10 Loot
@@ -513,7 +544,7 @@ export default function HomePage() {
                                             colorScheme="purple"
                                             mt={2}
                                             onClick={() =>
-                                                handleProcessProposal(
+                                                handleProcessLootProposal(
                                                     proposal.id
                                                 )
                                             }
@@ -526,6 +557,43 @@ export default function HomePage() {
                             ))
                         )}
                     </Box>
+                </>
+            )}
+
+            {viewMode === 'fee' && (
+                // -----------------------------
+                // BAAL INFO SECTION
+                // -----------------------------
+                <>
+                    <VStack spacing={2} mb={6}>
+                        {account ? (
+                            <Text fontSize="lg" textColor="white">
+                                Connected Wallet: {account}
+                            </Text>
+                        ) : (
+                            <Text fontSize="lg" textColor="red.300">
+                                Please connect your wallet
+                            </Text>
+                        )}
+                        <Text fontSize="lg" textColor="white">
+                            Your Governance Token Balance:{' '}
+                            {userGovernanceTokenBalance}
+                        </Text>
+                        <Button
+                            colorScheme="blue"
+                            onClick={handleSubmitFeeProposal}
+                            isLoading={loading}
+                        >
+                            Submit Proposal to Set Fee
+                        </Button>
+
+                        {/* Display errors */}
+                        {error && (
+                            <Text fontSize="lg" textColor="red.300">
+                                Error: {error}
+                            </Text>
+                        )}
+                    </VStack>
                 </>
             )}
 
@@ -548,7 +616,7 @@ export default function HomePage() {
                             Your Loot Balance: {userLootBalance}
                         </Text>
                         <Text fontSize="lg" textColor="white">
-                            Your Governance Balance:{' '}
+                            Your Governance Token Balance:{' '}
                             {userGovernanceTokenBalance}
                         </Text>
 

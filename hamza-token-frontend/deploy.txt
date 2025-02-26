@@ -24,4 +24,5 @@
   PurchaseTracker deployed at: 0xe9C76125d7B606DA7817E28AF6C3849b3604ADC9
   PaymentEscrow deployed at: 0x49BBF06b022Af1C01E35492ac35aC696FbE9A278
   EscrowMulticall deployed at: 0xd1597eEC20eb8E87B7BA5fe99ab404be835139a6
+  SystemSettings deployed at: 0xdefadc79d545866cfcca8164205284d5de698595
   -----------------------------------------------
