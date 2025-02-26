@@ -332,22 +332,21 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const submitFeeProposal = async (expiration = 0, baalGas = 1500000) => {
+    const submitFeeProposal = async (feeBps) => {
         if (!governorContract || !account) return;
         try {
             console.log('Submitting proposal: change fee...');
             // 1. Encode the setFeeBps call
-            const feeBpsAmount = 13; //TODO: make this an argument
             const setFeeData = settingsContract.interface.encodeFunctionData(
                 'setFeeBps',
-                [feeBpsAmount]
+                [feeBps]
             );
 
             const tx = await governorContract.propose(
                 [SETTINGS_CONTRACT_ADDRESS],
                 [0],
                 [setFeeData],
-                `Proposal to set fee to ${feeBpsAmount}`
+                `Proposal to set fee to ${feeBps}`
             );
             const receipt = await tx.wait();
             console.log('submitProposal receipt:', receipt);
@@ -375,6 +374,77 @@ export const Web3Provider = ({ children }) => {
         } catch (error) {
             console.error('Error submitting proposal:', error);
         }
+    };
+
+    const submitFeeVote = async (proposalId, support) => {
+        if (!governorContract || !account) return;
+        try {
+            const tx = await governorContract.castVote(
+                proposalId,
+                support ? 1 : 0
+            );
+            const receipt = await tx.wait();
+            console.log('Submit Fee Vote:', receipt);
+            return receipt;
+        } catch (error) {
+            console.error('Error casting governance vote:', error);
+        }
+
+        try {
+            const tx = await governorContract.castVote(
+                proposalId,
+                support ? 1 : 0
+            );
+            const receipt = await tx.wait();
+            return receipt;
+        } catch (error) {
+            console.error('Error submitting governance vote:', error);
+        }
+    };
+
+    const executeFeeProposal = async (proposalId, feeBps) => {
+        if (!governorContract || !account) return;
+        try {
+            const setFeeData = settingsContract.interface.encodeFunctionData(
+                'setFeeBps',
+                [feeBps]
+            );
+
+            const tx = await governorContract.execute(
+                [SETTINGS_CONTRACT_ADDRESS],
+                [0],
+                [setFeeData],
+                ethers.keccak256(
+                    ethers.toUtf8Bytes(`Proposal to set fee to ${feeBps}`)
+                )
+            );
+
+            const receipt = await tx.wait();
+            return receipt;
+        } catch (error) {
+            console.error('Error executing governance vote:', error);
+        }
+    };
+
+    const getGovernanceProposalState = async (proposalId) => {
+        if (!governorContract) return 'Unknown';
+        try {
+            const state = await governorContract.state(proposalId);
+            const mapping = [
+                'Pending',
+                'Active',
+                'Canceled',
+                'Defeated',
+                'Succeeded',
+                'Queued',
+                'Expired',
+                'Executed',
+            ];
+            return mapping[Number(state)] || 'Unknown';
+        } catch (error) {
+            console.error('Error fetching proposal state:', error);
+        }
+        return 'Unknown';
     };
 
     //returns the new balance
@@ -509,7 +579,6 @@ export const Web3Provider = ({ children }) => {
                 getTotalShares,
                 getTotalLoot,
                 submitLootProposal,
-                submitFeeProposal,
                 sponsorProposalViaSafe,
                 submitBaalVote,
                 getBaalProposalCount,
@@ -517,6 +586,10 @@ export const Web3Provider = ({ children }) => {
                 getBaalProposalState,
                 processBaalProposal,
                 cancelProposalViaSafe,
+                submitFeeProposal,
+                submitFeeVote,
+                executeFeeProposal,
+                getGovernanceProposalState,
                 wrapGovernanceToken,
                 getUserLootBalance,
                 getUserSharesBalance,

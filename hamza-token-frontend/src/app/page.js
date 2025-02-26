@@ -28,6 +28,9 @@ export default function HomePage() {
         getUserLootBalance,
         getUserSharesBalance,
         submitFeeProposal,
+        submitFeeVote,
+        executeFeeProposal,
+        getGovernanceProposalState,
         getUserGovernanceTokenBalance,
         getBaalConfig,
     } = useWeb3();
@@ -41,12 +44,18 @@ export default function HomePage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [proposals, setProposals] = useState([]);
+
+    //governance vote params
     const [govTokenWrapAmount, setGovTokenWrapAmount] = useState('0');
+    const [feeSetAmount, setFeeSetAmount] = useState('0');
+    const [govProposalId, setGovProposalId] = useState(
+        '0x38d90616213766897e988bdf50bdcfda07623c9ac8a00b2a773ab054c5ef0daa'
+    );
 
     // Baal config data
     const [baalConfig, setBaalConfig] = useState(null);
 
-    // User loot/shares balances
+    // User balances
     const [userLootBalance, setUserLootBalance] = useState('0');
     const [userSharesBalance, setUserSharesBalance] = useState('0');
     const [userGovernanceTokenBalance, setUserGovernanceTokenBalance] =
@@ -250,12 +259,12 @@ export default function HomePage() {
         setError(null);
         try {
             console.log('Submitting proposal to mint 10 loot to self...');
-            const proposalId = await submitFeeProposal();
+            const proposalId = await submitFeeProposal(feeSetAmount);
             if (!proposalId) {
                 console.warn('No proposal ID returned or event was not found.');
             } else {
                 console.log(`Proposal submitted! ID: ${proposalId}`);
-                await loadProposals();
+                setGovProposalId('0x' + BigInt(proposalId).toString(16));
             }
         } catch (err) {
             console.error('Error submitting proposal:', err);
@@ -265,14 +274,51 @@ export default function HomePage() {
         }
     };
 
+    // Vote on a proposal to change fee
+    const handleSubmitFeeVote = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const state = await getGovernanceProposalState(govProposalId);
+            console.log(state);
+            await submitFeeVote(govProposalId, 1);
+        } catch (err) {
+            console.error('Error voting on proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Execute a proposal to change fee
+    const handleExecuteFeeProposal = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            await executeFeeProposal(govProposalId, feeSetAmount);
+        } catch (err) {
+            console.error('Error executing proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Ensures that input is numeric by stripping out non-numerics
-    const sanitizeNumber = (input) => {
-        let sanitized = input.replace(/[^0-9.]/g, '');
-        const firstDecimalIndex = sanitized.indexOf('.');
-        if (firstDecimalIndex !== -1) {
-            sanitized =
-                sanitized.substring(0, firstDecimalIndex + 1) +
-                sanitized.substring(firstDecimalIndex + 1).replace(/\./g, '');
+    const sanitizeNumber = (input, allowDecimal) => {
+        let sanitized = allowDecimal
+            ? input.replace(/[^0-9.]/g, '')
+            : input.replace(/[^0-9]/g, '');
+
+        if (allowDecimal) {
+            const firstDecimalIndex = sanitized.indexOf('.');
+            if (firstDecimalIndex !== -1) {
+                sanitized =
+                    sanitized.substring(0, firstDecimalIndex + 1) +
+                    sanitized
+                        .substring(firstDecimalIndex + 1)
+                        .replace(/\./g, '');
+            }
         }
 
         return sanitized;
@@ -579,12 +625,56 @@ export default function HomePage() {
                             Your Governance Token Balance:{' '}
                             {userGovernanceTokenBalance}
                         </Text>
+                        <input
+                            type="text"
+                            value={feeSetAmount}
+                            onChange={(e) => {
+                                setFeeSetAmount(sanitizeNumber(e.target.value));
+                            }}
+                            style={{ color: 'black' }}
+                            className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="value to set"
+                        />
                         <Button
                             colorScheme="blue"
                             onClick={handleSubmitFeeProposal}
                             isLoading={loading}
                         >
                             Submit Proposal to Set Fee
+                        </Button>
+
+                        {/* Display last proposal Id */}
+                        {govProposalId?.length && (
+                            <Text fontSize="lg" textColor="blue.300">
+                                Last Proposal ID: <b>{govProposalId}</b>
+                            </Text>
+                        )}
+
+                        <input
+                            type="text"
+                            value={govProposalId}
+                            onChange={(e) => {
+                                setGovProposalId(e.target.value);
+                            }}
+                            style={{ color: 'black' }}
+                            className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="proposal id"
+                        />
+
+                        <Button
+                            colorScheme="blue"
+                            onClick={handleSubmitFeeVote}
+                            isLoading={loading}
+                        >
+                            Submit Vote to Set Fee
+                        </Button>
+
+                        <Button
+                            colorScheme="blue"
+                            onClick={handleExecuteFeeProposal}
+                            isLoading={loading}
+                        >
+                            Execute Proposal
                         </Button>
 
                         {/* Display errors */}
