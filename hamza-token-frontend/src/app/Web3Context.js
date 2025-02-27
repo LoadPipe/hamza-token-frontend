@@ -410,7 +410,8 @@ export const Web3Provider = ({ children }) => {
                 [feeBps]
             );
 
-            const tx = await governorContract.execute(
+            console.log('executing proposal...');
+            const txExec = await governorContract.execute(
                 [SETTINGS_CONTRACT_ADDRESS],
                 [0],
                 [setFeeData],
@@ -419,7 +420,7 @@ export const Web3Provider = ({ children }) => {
                 )
             );
 
-            const receipt = await tx.wait();
+            const receipt = await txExec.wait();
             return receipt;
         } catch (error) {
             console.error('Error executing governance vote:', error);
