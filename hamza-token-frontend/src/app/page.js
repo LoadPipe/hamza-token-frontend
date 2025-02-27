@@ -114,6 +114,7 @@ export default function HomePage() {
     // -----------------------------
     // Proposals
     // -----------------------------
+    // Load Baal proposals
     const loadBaalProposals = async () => {
         if (!account) return;
         try {
@@ -139,6 +140,8 @@ export default function HomePage() {
             setLoading(false);
         }
     };
+
+    // Retrieve saved fee-change governance proposals
     const getFeeProposals = () => {
         const proposalsJson = localStorage.getItem('feeProposals');
         if (proposalsJson?.length) {
@@ -146,6 +149,8 @@ export default function HomePage() {
         }
         return [];
     };
+
+    // Load saved fee-change proposals
     const loadFeeProposals = async () => {
         try {
             setLoading(true);
@@ -160,11 +165,20 @@ export default function HomePage() {
             setLoading(false);
         }
     };
-    const addFeeProposal = (proposal) => {
+
+    // Add a new fee-change proposal to the saved list
+    const addFeeProposal = async (proposal) => {
         try {
             let proposals = getFeeProposals();
             if (!proposals) proposals = [];
-            proposals.push(proposal);
+            proposal.state = await getGovernanceProposalState(proposal.id);
+
+            const existing = proposals.find((p) => p.id == proposal.id);
+            if (existing) {
+                existing.state = proposal.state;
+            } else {
+                proposals.push(proposal);
+            }
             localStorage.setItem('feeProposals', JSON.stringify(proposals));
         } catch (err) {
             console.error('Error adding fee proposal:', err);
@@ -676,7 +690,7 @@ export default function HomePage() {
                             }}
                             style={{ color: 'black' }}
                             className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="value to set"
+                            placeholder="fee bps to set"
                         />
                         <Button
                             colorScheme="blue"
@@ -730,6 +744,9 @@ export default function HomePage() {
                                         </Text>
                                         <Text textColor="white">
                                             Fee: {proposal.fee}
+                                        </Text>
+                                        <Text textColor="white">
+                                            State: {proposal.state}
                                         </Text>
                                         <Button
                                             colorScheme="purple"
