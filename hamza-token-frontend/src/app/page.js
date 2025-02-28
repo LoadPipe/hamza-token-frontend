@@ -18,15 +18,19 @@ export default function HomePage() {
         getTotalShares,
         getTotalLoot,
         sponsorProposalViaSafe,
-        submitProposal,
-        submitVote,
+        submitLootProposal,
+        submitBaalVote,
         cancelProposalViaSafe,
         wrapGovernanceToken,
-        getAllProposals,
-        getProposalState,
-        processProposal,
+        getAllBaalProposals,
+        getBaalProposalState,
+        processBaalProposal,
         getUserLootBalance,
         getUserSharesBalance,
+        submitFeeProposal,
+        submitFeeVote,
+        executeFeeProposal,
+        getGovernanceProposalState,
         getUserGovernanceTokenBalance,
         getBaalConfig,
     } = useWeb3();
@@ -39,13 +43,21 @@ export default function HomePage() {
     const [totalLoot, setTotalLoot] = useState('Loading...');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [proposals, setProposals] = useState([]);
+    const [baalProposals, setBaalProposals] = useState([]);
+    const [feeProposals, setFeeProposals] = useState([]);
+
+    //governance vote params
     const [govTokenWrapAmount, setGovTokenWrapAmount] = useState('0');
+    const [feeSetAmount, setFeeSetAmount] = useState('0');
+    const [govProposalId, setGovProposalId] = useState(
+        '0x38d90616213766897e988bdf50bdcfda07623c9ac8a00b2a773ab054c5ef0daa'
+    );
+    const [govProposalState, setGovProposalState] = useState('');
 
     // Baal config data
     const [baalConfig, setBaalConfig] = useState(null);
 
-    // User loot/shares balances
+    // User balances
     const [userLootBalance, setUserLootBalance] = useState('0');
     const [userSharesBalance, setUserSharesBalance] = useState('0');
     const [userGovernanceTokenBalance, setUserGovernanceTokenBalance] =
@@ -102,14 +114,15 @@ export default function HomePage() {
     // -----------------------------
     // Proposals
     // -----------------------------
-    const loadProposals = async () => {
+    // Load Baal proposals
+    const loadBaalProposals = async () => {
         if (!account) return;
         try {
             setLoading(true);
-            const allProposals = await getAllProposals();
+            const allProposals = await getAllBaalProposals();
             const proposalsWithState = await Promise.all(
                 allProposals.map(async (prop) => {
-                    const state = await getProposalState(prop.id);
+                    const state = await getBaalProposalState(prop.id);
                     return {
                         id: prop.id.toString(),
                         sponsor: prop.sponsor,
@@ -119,7 +132,7 @@ export default function HomePage() {
                     };
                 })
             );
-            setProposals(proposalsWithState);
+            setBaalProposals(proposalsWithState);
         } catch (err) {
             console.error('Error loading proposals:', err);
             setError(err.message);
@@ -128,25 +141,73 @@ export default function HomePage() {
         }
     };
 
+    // Retrieve saved fee-change governance proposals
+    const getFeeProposals = () => {
+        const proposalsJson = localStorage.getItem('feeProposals');
+        if (proposalsJson?.length) {
+            return JSON.parse(proposalsJson);
+        }
+        return [];
+    };
+
+    // Load saved fee-change proposals
+    const loadFeeProposals = async () => {
+        try {
+            setLoading(true);
+            const proposals = getFeeProposals();
+            if (proposals?.length) {
+                setFeeProposals(proposals);
+            }
+        } catch (err) {
+            console.error('Error loading fee proposals:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Add a new fee-change proposal to the saved list
+    const addFeeProposal = async (proposal) => {
+        try {
+            let proposals = getFeeProposals();
+            if (!proposals) proposals = [];
+            proposal.state = await getGovernanceProposalState(proposal.id);
+
+            const existing = proposals.find((p) => p.id == proposal.id);
+            if (existing) {
+                existing.state = proposal.state;
+            } else {
+                proposals.push(proposal);
+            }
+            localStorage.setItem('feeProposals', JSON.stringify(proposals));
+        } catch (err) {
+            console.error('Error adding fee proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        loadProposals();
+        loadBaalProposals();
+        loadFeeProposals();
     }, [account]);
 
     // -----------------------------
     // Handlers
     // -----------------------------
     // Submit a new proposal (mints 10 loot to self)
-    const handleSubmitProposal = async () => {
+    const handleSubmitLootProposal = async () => {
         setLoading(true);
         setError(null);
         try {
             console.log('Submitting proposal to mint 10 loot to self...');
-            const proposalId = await submitProposal();
+            const proposalId = await submitLootProposal();
             if (!proposalId) {
                 console.warn('No proposal ID returned or event was not found.');
             } else {
                 console.log(`Proposal submitted! ID: ${proposalId}`);
-                await loadProposals();
+                await loadBaalProposals();
             }
         } catch (err) {
             console.error('Error submitting proposal:', err);
@@ -157,14 +218,14 @@ export default function HomePage() {
     };
 
     // Sponsor a proposal (via Gnosis Safe transaction)
-    const handleSponsorProposal = async (id) => {
+    const handleSponsorBaalProposal = async (id) => {
         setLoading(true);
         setError(null);
         try {
             console.log(`Sponsoring proposal ${id}...`);
             await sponsorProposalViaSafe(id);
             console.log('Proposal sponsored successfully!');
-            await loadProposals();
+            await loadBaalProposals();
         } catch (err) {
             console.error('Error sponsoring proposal:', err);
             setError(err.message);
@@ -174,14 +235,14 @@ export default function HomePage() {
     };
 
     // Vote on a proposal (via Gnosis Safe transaction)
-    const handleVote = async (id, support) => {
+    const handleBaalVote = async (id, support) => {
         setLoading(true);
         setError(null);
         try {
             console.log(`Voting on proposal ${id}: support = ${support}`);
-            await submitVote(id, support);
+            await submitBaalVote(id, support);
             console.log('Vote submitted successfully!');
-            await loadProposals();
+            await loadBaalProposals();
         } catch (err) {
             console.error('Error submitting vote:', err);
             setError(err.message);
@@ -191,14 +252,14 @@ export default function HomePage() {
     };
 
     // Cancel a proposal (via Gnosis Safe transaction)
-    const handleCancelProposal = async (id) => {
+    const handleCancelBaalProposal = async (id) => {
         setLoading(true);
         setError(null);
         try {
             console.log(`Cancelling proposal ${id}...`);
             await cancelProposalViaSafe(id);
             console.log('Proposal cancelled successfully!');
-            await loadProposals();
+            await loadBaalProposals();
         } catch (err) {
             console.error('Error cancelling proposal:', err);
             setError(err.message);
@@ -208,14 +269,14 @@ export default function HomePage() {
     };
 
     // Process a proposal
-    const handleProcessProposal = async (id) => {
+    const handleProcessBaalProposal = async (id) => {
         setLoading(true);
         setError(null);
         try {
             console.log(`Processing proposal ${id}...`);
-            await processProposal(id);
+            await processBaalProposal(id);
             console.log('Proposal processed successfully!');
-            await loadProposals();
+            await loadBaalProposals();
         } catch (err) {
             console.error('Error processing proposal:', err);
             setError(err.message);
@@ -241,13 +302,80 @@ export default function HomePage() {
         }
     };
 
-    const sanitizeNumber = (input) => {
-        let sanitized = input.replace(/[^0-9.]/g, '');
-        const firstDecimalIndex = sanitized.indexOf('.');
-        if (firstDecimalIndex !== -1) {
-            sanitized =
-                sanitized.substring(0, firstDecimalIndex + 1) +
-                sanitized.substring(firstDecimalIndex + 1).replace(/\./g, '');
+    // Handlers
+    // -----------------------------
+    // Submit a new proposal to change fee
+    const handleSubmitFeeProposal = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            console.log('Submitting proposal to mint 10 loot to self...');
+            const proposalId = await submitFeeProposal(feeSetAmount);
+            if (!proposalId) {
+                console.warn('No proposal ID returned or event was not found.');
+            } else {
+                console.log(`Proposal submitted! ID: ${proposalId}`);
+                //setGovProposalId('0x' + BigInt(proposalId).toString(16));
+
+                //store proposal in localStorage
+                addFeeProposal({ id: proposalId, fee: feeSetAmount });
+            }
+        } catch (err) {
+            console.error('Error submitting proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Vote on a proposal to change fee
+    const handleSubmitFeeVote = async (id, support) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const state = await getGovernanceProposalState(id);
+            console.log(state);
+            await submitFeeVote(id, support);
+        } catch (err) {
+            console.error('Error voting on proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Execute a proposal to change fee
+    const handleExecuteFeeProposal = async (id, fee) => {
+        setLoading(true);
+        setError(null);
+        try {
+            setGovProposalState(
+                await getGovernanceProposalState(govProposalId)
+            );
+            await executeFeeProposal(id, fee);
+        } catch (err) {
+            console.error('Error executing proposal:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Ensures that input is numeric by stripping out non-numerics
+    const sanitizeNumber = (input, allowDecimal) => {
+        let sanitized = allowDecimal
+            ? input.replace(/[^0-9.]/g, '')
+            : input.replace(/[^0-9]/g, '');
+
+        if (allowDecimal) {
+            const firstDecimalIndex = sanitized.indexOf('.');
+            if (firstDecimalIndex !== -1) {
+                sanitized =
+                    sanitized.substring(0, firstDecimalIndex + 1) +
+                    sanitized
+                        .substring(firstDecimalIndex + 1)
+                        .replace(/\./g, '');
+            }
         }
 
         return sanitized;
@@ -284,6 +412,12 @@ export default function HomePage() {
                     onClick={() => setViewMode('wrap-gov')}
                 >
                     Wrap Governance Token
+                </Button>
+                <Button
+                    colorScheme={viewMode === 'fee' ? 'blue' : 'gray'}
+                    onClick={() => setViewMode('fee')}
+                >
+                    Set Fee
                 </Button>
             </HStack>
             {/* Conditionally render either "User Info" or "Baal Info" */}
@@ -331,7 +465,7 @@ export default function HomePage() {
                         </Text>
                         <Button
                             colorScheme="blue"
-                            onClick={handleSubmitProposal}
+                            onClick={handleSubmitLootProposal}
                             isLoading={loading}
                         >
                             Submit Proposal for 10 Loot
@@ -411,15 +545,15 @@ export default function HomePage() {
                         </Heading>
                         <Button
                             mb={4}
-                            onClick={loadProposals}
+                            onClick={loadBaalProposals}
                             isLoading={loading}
                         >
                             Refresh Proposals
                         </Button>
-                        {proposals.length === 0 ? (
+                        {baalProposals.length === 0 ? (
                             <Text textColor="white">No proposals found.</Text>
                         ) : (
-                            proposals.map((proposal) => (
+                            baalProposals.map((proposal) => (
                                 <Box
                                     key={proposal.id}
                                     bg="gray.700"
@@ -449,7 +583,7 @@ export default function HomePage() {
                                             colorScheme="orange"
                                             mt={2}
                                             onClick={() =>
-                                                handleSponsorProposal(
+                                                handleSponsorBaalProposal(
                                                     proposal.id
                                                 )
                                             }
@@ -466,7 +600,7 @@ export default function HomePage() {
                                                 <Button
                                                     colorScheme="green"
                                                     onClick={() =>
-                                                        handleVote(
+                                                        handleBaalVote(
                                                             proposal.id,
                                                             true
                                                         )
@@ -478,7 +612,7 @@ export default function HomePage() {
                                                 <Button
                                                     colorScheme="red"
                                                     onClick={() =>
-                                                        handleVote(
+                                                        handleBaalVote(
                                                             proposal.id,
                                                             false
                                                         )
@@ -495,7 +629,7 @@ export default function HomePage() {
                                                         colorScheme="yellow"
                                                         mt={2}
                                                         onClick={() =>
-                                                            handleCancelProposal(
+                                                            handleCancelBaalProposal(
                                                                 proposal.id
                                                             )
                                                         }
@@ -513,7 +647,7 @@ export default function HomePage() {
                                             colorScheme="purple"
                                             mt={2}
                                             onClick={() =>
-                                                handleProcessProposal(
+                                                handleProcessBaalProposal(
                                                     proposal.id
                                                 )
                                             }
@@ -526,6 +660,139 @@ export default function HomePage() {
                             ))
                         )}
                     </Box>
+                </>
+            )}
+
+            {viewMode === 'fee' && (
+                // -----------------------------
+                // SET FEE SECTION
+                // -----------------------------
+                <>
+                    <VStack spacing={2} mb={6}>
+                        {account ? (
+                            <Text fontSize="lg" textColor="white">
+                                Connected Wallet: {account}
+                            </Text>
+                        ) : (
+                            <Text fontSize="lg" textColor="red.300">
+                                Please connect your wallet
+                            </Text>
+                        )}
+                        <Text fontSize="lg" textColor="white">
+                            Your Governance Token Balance:{' '}
+                            {userGovernanceTokenBalance}
+                        </Text>
+                        <input
+                            type="text"
+                            value={feeSetAmount}
+                            onChange={(e) => {
+                                setFeeSetAmount(sanitizeNumber(e.target.value));
+                            }}
+                            style={{ color: 'black' }}
+                            className="border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="fee bps to set"
+                        />
+                        <Button
+                            colorScheme="blue"
+                            onClick={handleSubmitFeeProposal}
+                            isLoading={loading}
+                        >
+                            Submit Proposal to Set Fee
+                        </Button>
+
+                        {/* Display last proposal state */}
+                        {govProposalState?.length && (
+                            <Text fontSize="lg" textColor="blue.300">
+                                Proposal state: <b>{govProposalState}</b>
+                            </Text>
+                        )}
+
+                        {/* Display errors */}
+                        {error && (
+                            <Text fontSize="lg" textColor="red.300">
+                                Error: {error}
+                            </Text>
+                        )}
+
+                        {/* Proposals List */}
+                        <Box width="80%" bg="gray.800" p={5} borderRadius="md">
+                            <Heading as="h2" size="lg" textColor="white" mb={4}>
+                                Proposals
+                            </Heading>
+                            <Button
+                                mb={4}
+                                onClick={loadFeeProposals}
+                                isLoading={loading}
+                            >
+                                Refresh Proposals
+                            </Button>
+                            {feeProposals.length === 0 ? (
+                                <Text textColor="white">
+                                    No proposals found.
+                                </Text>
+                            ) : (
+                                feeProposals.map((proposal) => (
+                                    <Box
+                                        key={proposal.id}
+                                        bg="gray.700"
+                                        p={4}
+                                        mb={2}
+                                        borderRadius="md"
+                                    >
+                                        <Text textColor="white">
+                                            ID: {proposal.id}
+                                        </Text>
+                                        <Text textColor="white">
+                                            Fee: {proposal.fee}
+                                        </Text>
+                                        <Text textColor="white">
+                                            State: {proposal.state}
+                                        </Text>
+                                        <Button
+                                            colorScheme="purple"
+                                            mt={2}
+                                            onClick={() =>
+                                                handleExecuteFeeProposal(
+                                                    proposal.id,
+                                                    proposal.fee
+                                                )
+                                            }
+                                            isLoading={loading}
+                                        >
+                                            Execute Proposal
+                                        </Button>
+
+                                        <HStack spacing={4} mt={2}>
+                                            <Button
+                                                colorScheme="green"
+                                                onClick={() =>
+                                                    handleSubmitFeeVote(
+                                                        proposal.id,
+                                                        true
+                                                    )
+                                                }
+                                                isLoading={loading}
+                                            >
+                                                Vote Yes
+                                            </Button>
+                                            <Button
+                                                colorScheme="red"
+                                                onClick={() =>
+                                                    handleSubmitFeeVote(
+                                                        proposal.id,
+                                                        false
+                                                    )
+                                                }
+                                                isLoading={loading}
+                                            >
+                                                Vote No
+                                            </Button>
+                                        </HStack>
+                                    </Box>
+                                ))
+                            )}
+                        </Box>
+                    </VStack>
                 </>
             )}
 
@@ -548,7 +815,7 @@ export default function HomePage() {
                             Your Loot Balance: {userLootBalance}
                         </Text>
                         <Text fontSize="lg" textColor="white">
-                            Your Governance Balance:{' '}
+                            Your Governance Token Balance:{' '}
                             {userGovernanceTokenBalance}
                         </Text>
 

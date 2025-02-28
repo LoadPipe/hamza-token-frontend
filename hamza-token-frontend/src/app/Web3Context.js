@@ -5,6 +5,8 @@ import CustomBaalABI from '../../abis/CustomBaal_abi.json';
 import GNOSIS_SAFE_ABI from '../../abis/GnosisSafe_abi.json';
 import ERC20_ABI from '../../abis/ERC20_abi.json';
 import GovernanceTokenABI from '../../abis/GovernanceToken_abi.json';
+import SettingsContractABI from '../../abis/SystemSettings_abi.json';
+import GovernorContractABI from '../../abis/HamzaGovernor_abi.json';
 
 const Web3Context = createContext();
 
@@ -12,13 +14,19 @@ export const Web3Provider = ({ children }) => {
     const [provider, setProvider] = useState(null);
     const [signer, setSigner] = useState(null);
     const [account, setAccount] = useState(null);
-    const [contract, setContract] = useState(null);
+    const [baalContract, setBaalContract] = useState(null);
+    const [settingsContract, setSettingsContract] = useState(null);
     const [govTokenContract, setGovTokenContract] = useState(null);
+    const [governorContract, setGovernorContract] = useState(null);
 
-    const CONTRACT_ADDRESS = '0x3410CA83D5902043C2C24760851033D304e94CF9'; // Baal contract
+    const BAAL_CONTRACT_ADDRESS = '0x3410CA83D5902043C2C24760851033D304e94CF9'; // Baal contract
     const GNOSIS_ADDRESS = '0xDD9f9570c2a8f8EB6a2aE001c224E226d77F0b63'; // hats admin multisig
     const GOVERNANCE_TOKEN_ADDRESS =
         '0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa'; //TODO: get from config
+    const SETTINGS_CONTRACT_ADDRESS =
+        '0xdefadc79d545866cfcca8164205284d5de698595'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
+    const GOVERNOR_CONTRACT_ADDRESS =
+        '0x3Db7C1a2bda3F478DF57B6833EC588be7Fa2dFD2';
 
     useEffect(() => {
         const initWeb3 = async () => {
@@ -37,12 +45,12 @@ export const Web3Provider = ({ children }) => {
 
                 //load custom Baal
                 const baalContract = new ethers.Contract(
-                    CONTRACT_ADDRESS,
+                    BAAL_CONTRACT_ADDRESS,
                     CustomBaalABI,
                     web3Signer
                 );
                 console.log('Contract loaded:', baalContract);
-                setContract(baalContract);
+                setBaalContract(baalContract);
 
                 //load governance token contract
                 const govTokenContract = new ethers.Contract(
@@ -51,6 +59,22 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setGovTokenContract(govTokenContract);
+
+                //load governance contract
+                const govContract = new ethers.Contract(
+                    GOVERNOR_CONTRACT_ADDRESS,
+                    GovernorContractABI,
+                    web3Signer
+                );
+                setGovernorContract(govContract);
+
+                //load system settings contract
+                const settingsContract = new ethers.Contract(
+                    SETTINGS_CONTRACT_ADDRESS,
+                    SettingsContractABI,
+                    web3Signer
+                );
+                setSettingsContract(settingsContract);
             } else {
                 console.error('No Ethereum wallet detected');
             }
@@ -58,29 +82,29 @@ export const Web3Provider = ({ children }) => {
         initWeb3();
     }, []);
 
-    const submitProposal = async (expiration = 0, baalGas = 1500000) => {
-        if (!contract || !account) return;
+    const submitLootProposal = async (expiration = 0, baalGas = 1500000) => {
+        if (!baalContract || !account) return;
         try {
             console.log('Submitting proposal: mintLoot to self for 10 loot...');
             // 1. Encode the mintLoot call
             const lootAmount = ethers.parseUnits('10', 18);
-            const mintLootData = contract.interface.encodeFunctionData(
+            const mintLootData = baalContract.interface.encodeFunctionData(
                 'mintLoot',
                 [[account], [lootAmount]]
             );
 
             // 2. Wrap that call in an executeAsBaal call
-            const executeAsBaalData = contract.interface.encodeFunctionData(
+            const executeAsBaalData = baalContract.interface.encodeFunctionData(
                 'executeAsBaal',
-                [CONTRACT_ADDRESS, 0, mintLootData]
+                [BAAL_CONTRACT_ADDRESS, 0, mintLootData]
             );
 
-            const multisendPayload = await contract.encodeMultisend(
+            const multisendPayload = await baalContract.encodeMultisend(
                 [mintLootData], // array of calls
-                CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
+                BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
             );
 
-            const tx = await contract.submitProposal(
+            const tx = await baalContract.submitProposal(
                 multisendPayload,
                 expiration,
                 baalGas,
@@ -91,7 +115,7 @@ export const Web3Provider = ({ children }) => {
 
             // Extract proposal ID from the SubmitProposal event logs.
             const eventSignature =
-                contract.interface.getEvent('SubmitProposal').topicHash;
+                baalContract.interface.getEvent('SubmitProposal').topicHash;
             const proposalEventLog = receipt.logs.find(
                 (log) => log.topics[0] === eventSignature
             );
@@ -102,7 +126,8 @@ export const Web3Provider = ({ children }) => {
                 );
                 return;
             }
-            const decodedEvent = contract.interface.parseLog(proposalEventLog);
+            const decodedEvent =
+                baalContract.interface.parseLog(proposalEventLog);
             const proposalId = decodedEvent.args[0];
             console.log(`Proposal submitted! ID: ${proposalId}`);
             return proposalId;
@@ -112,9 +137,9 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getTotalShares = async () => {
-        if (!contract) return;
+        if (!baalContract) return;
         try {
-            const totalShares = await contract.totalShares();
+            const totalShares = await baalContract.totalShares();
             console.log('Raw Total Shares:', totalShares.toString());
             return totalShares.toString();
         } catch (error) {
@@ -123,9 +148,9 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getTotalLoot = async () => {
-        if (!contract) return;
+        if (!baalContract) return;
         try {
-            const totalLoot = await contract.totalLoot();
+            const totalLoot = await baalContract.totalLoot();
             const parsedLoot = ethers.formatUnits(totalLoot, 18);
             console.log('Raw Total Loot:', parsedLoot);
             return parsedLoot;
@@ -168,14 +193,14 @@ export const Web3Provider = ({ children }) => {
     };
 
     const sponsorProposalViaSafe = async (proposalId) => {
-        if (!contract) return;
+        if (!baalContract) return;
         try {
-            const data = contract.interface.encodeFunctionData(
+            const data = baalContract.interface.encodeFunctionData(
                 'sponsorProposal',
                 [proposalId]
             );
             const receipt = await execSafeTransaction(
-                CONTRACT_ADDRESS,
+                BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -186,15 +211,15 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const submitVote = async (proposalId, support) => {
-        if (!contract) return;
+    const submitBaalVote = async (proposalId, support) => {
+        if (!baalContract) return;
         try {
-            const data = contract.interface.encodeFunctionData('submitVote', [
-                proposalId,
-                support,
-            ]);
+            const data = baalContract.interface.encodeFunctionData(
+                'submitVote',
+                [proposalId, support]
+            );
             const receipt = await execSafeTransaction(
-                CONTRACT_ADDRESS,
+                BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -205,10 +230,10 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const getProposalCount = async () => {
-        if (!contract) return 0;
+    const getBaalProposalCount = async () => {
+        if (!baalContract) return 0;
         try {
-            const count = await contract.proposalCount();
+            const count = await baalContract.proposalCount();
             return Number(count);
         } catch (error) {
             console.error('Error fetching proposal count:', error);
@@ -216,13 +241,13 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const getAllProposals = async () => {
-        if (!contract) return [];
+    const getAllBaalProposals = async () => {
+        if (!baalContract) return [];
         try {
-            const count = await getProposalCount();
+            const count = await getBaalProposalCount();
             const proposalsArr = [];
             for (let i = 1; i <= count; i++) {
-                const prop = await contract.proposals(i);
+                const prop = await baalContract.proposals(i);
                 proposalsArr.push(prop);
             }
             return proposalsArr;
@@ -232,10 +257,10 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const getProposalState = async (proposalId) => {
-        if (!contract) return 'Unknown';
+    const getBaalProposalState = async (proposalId) => {
+        if (!baalContract) return 'Unknown';
         try {
-            const stateVal = await contract.state(proposalId);
+            const stateVal = await baalContract.state(proposalId);
             const num = Number(stateVal);
             const mapping = [
                 'Unborn',
@@ -254,29 +279,29 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    const processProposal = async (proposalId) => {
-        if (!contract || !account) return;
+    const processBaalProposal = async (proposalId) => {
+        if (!baalContract || !account) return;
         try {
             console.log('Processing proposal', proposalId);
             // 1. Encode the mintLoot call
             const lootAmount = ethers.parseUnits('10', 18);
-            const mintLootData = contract.interface.encodeFunctionData(
+            const mintLootData = baalContract.interface.encodeFunctionData(
                 'mintLoot',
                 [[account], [lootAmount]]
             );
 
             // 2. Wrap that call in an executeAsBaal call
-            const executeAsBaalData = contract.interface.encodeFunctionData(
+            const executeAsBaalData = baalContract.interface.encodeFunctionData(
                 'executeAsBaal',
-                [CONTRACT_ADDRESS, 0, mintLootData]
+                [BAAL_CONTRACT_ADDRESS, 0, mintLootData]
             );
 
-            const multisendPayload = await contract.encodeMultisend(
+            const multisendPayload = await baalContract.encodeMultisend(
                 [mintLootData], // array of calls
-                CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
+                BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
             );
 
-            const tx = await contract.processProposal(
+            const tx = await baalContract.processProposal(
                 proposalId,
                 multisendPayload
             );
@@ -289,14 +314,14 @@ export const Web3Provider = ({ children }) => {
     };
 
     const cancelProposalViaSafe = async (proposalId) => {
-        if (!contract) return;
+        if (!baalContract) return;
         try {
-            const data = contract.interface.encodeFunctionData(
+            const data = baalContract.interface.encodeFunctionData(
                 'cancelProposal',
                 [proposalId]
             );
             const receipt = await execSafeTransaction(
-                CONTRACT_ADDRESS,
+                BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -305,6 +330,122 @@ export const Web3Provider = ({ children }) => {
         } catch (error) {
             console.error('Error cancelling proposal via Safe:', error);
         }
+    };
+
+    const submitFeeProposal = async (feeBps) => {
+        if (!governorContract || !account) return;
+        try {
+            console.log('Submitting proposal: change fee...');
+            // 1. Encode the setFeeBps call
+            const setFeeData = settingsContract.interface.encodeFunctionData(
+                'setFeeBps',
+                [feeBps]
+            );
+
+            const tx = await governorContract.propose(
+                [SETTINGS_CONTRACT_ADDRESS],
+                [0],
+                [setFeeData],
+                `Proposal to set fee to ${feeBps}`
+            );
+            const receipt = await tx.wait();
+            console.log('submitProposal receipt:', receipt);
+
+            // Extract proposal ID from the SubmitProposal event logs.
+            const eventSignature =
+                governorContract.interface.getEvent(
+                    'ProposalCreated'
+                ).topicHash;
+            const proposalEventLog = receipt.logs.find(
+                (log) => log.topics[0] === eventSignature
+            );
+            if (!proposalEventLog) {
+                console.error(
+                    'ProposalCreated event not found in logs:',
+                    receipt.logs
+                );
+                return;
+            }
+            const decodedEvent =
+                governorContract.interface.parseLog(proposalEventLog);
+            const proposalId = decodedEvent.args[0];
+            console.log(`Proposal submitted! ID: ${proposalId}`);
+            return proposalId;
+        } catch (error) {
+            console.error('Error submitting proposal:', error);
+        }
+    };
+
+    const submitFeeVote = async (proposalId, support) => {
+        if (!governorContract || !account) return;
+        try {
+            const tx = await governorContract.castVote(
+                proposalId,
+                support ? 1 : 0
+            );
+            const receipt = await tx.wait();
+            console.log('Submit Fee Vote:', receipt);
+            return receipt;
+        } catch (error) {
+            console.error('Error casting governance vote:', error);
+        }
+
+        try {
+            const tx = await governorContract.castVote(
+                proposalId,
+                support ? 1 : 0
+            );
+            const receipt = await tx.wait();
+            return receipt;
+        } catch (error) {
+            console.error('Error submitting governance vote:', error);
+        }
+    };
+
+    const executeFeeProposal = async (proposalId, feeBps) => {
+        if (!governorContract || !account) return;
+        try {
+            const setFeeData = settingsContract.interface.encodeFunctionData(
+                'setFeeBps',
+                [feeBps]
+            );
+
+            console.log('executing proposal...');
+            const txExec = await governorContract.execute(
+                [SETTINGS_CONTRACT_ADDRESS],
+                [0],
+                [setFeeData],
+                ethers.keccak256(
+                    ethers.toUtf8Bytes(`Proposal to set fee to ${feeBps}`)
+                )
+            );
+
+            const receipt = await txExec.wait();
+            return receipt;
+        } catch (error) {
+            console.error('Error executing governance vote:', error);
+        }
+    };
+
+    const getGovernanceProposalState = async (proposalId) => {
+        if (!governorContract) return 'Unknown';
+        try {
+            const state = await governorContract.state(proposalId);
+            const mapping = [
+                'Pending',
+                'Active',
+                'Canceled',
+                'Defeated',
+                'Succeeded',
+                'Queued',
+                'Expired',
+                'Executed',
+            ];
+            return mapping[Number(state)] || 'Unknown';
+        } catch (error) {
+            console.error('Error fetching proposal state:', error);
+        }
+        return 'Unknown';
     };
 
     //returns the new balance
@@ -320,7 +461,7 @@ export const Web3Provider = ({ children }) => {
             console.log('amount to wrap: ', amountInWei);
 
             const lootToken = new ethers.Contract(
-                await contract.lootToken(),
+                await baalContract.lootToken(),
                 ERC20_ABI,
                 signer
             );
@@ -345,9 +486,9 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getUserLootBalance = async (userAddress) => {
-        if (!contract || !provider) return '0';
+        if (!baalContract || !provider) return '0';
         try {
-            const lootTokenAddress = await contract.lootToken();
+            const lootTokenAddress = await baalContract.lootToken();
             const lootContract = new ethers.Contract(
                 lootTokenAddress,
                 ERC20_ABI,
@@ -363,9 +504,9 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getUserSharesBalance = async (userAddress) => {
-        if (!contract || !provider) return '0';
+        if (!baalContract || !provider) return '0';
         try {
-            const sharesTokenAddress = await contract.sharesToken();
+            const sharesTokenAddress = await baalContract.sharesToken();
             const sharesContract = new ethers.Contract(
                 sharesTokenAddress,
                 ERC20_ABI,
@@ -397,18 +538,19 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getBaalConfig = async () => {
-        if (!contract) return null;
+        if (!baalContract) return null;
         try {
-            const votingPeriod = await contract.votingPeriod();
-            const gracePeriod = await contract.gracePeriod();
-            const proposalOffering = await contract.proposalOffering();
-            const quorumPercent = await contract.quorumPercent();
-            const sponsorThreshold = await contract.sponsorThreshold();
-            const minRetentionPercent = await contract.minRetentionPercent();
-            const adminLock = await contract.adminLock();
-            const managerLock = await contract.managerLock();
-            const governorLock = await contract.governorLock();
-            const communityVault = await contract.communityVault();
+            const votingPeriod = await baalContract.votingPeriod();
+            const gracePeriod = await baalContract.gracePeriod();
+            const proposalOffering = await baalContract.proposalOffering();
+            const quorumPercent = await baalContract.quorumPercent();
+            const sponsorThreshold = await baalContract.sponsorThreshold();
+            const minRetentionPercent =
+                await baalContract.minRetentionPercent();
+            const adminLock = await baalContract.adminLock();
+            const managerLock = await baalContract.managerLock();
+            const governorLock = await baalContract.governorLock();
+            const communityVault = await baalContract.communityVault();
 
             return {
                 votingPeriod: votingPeriod.toString(),
@@ -432,19 +574,23 @@ export const Web3Provider = ({ children }) => {
         <Web3Context.Provider
             value={{
                 account,
-                contract,
+                contract: baalContract,
                 provider,
                 signer,
                 getTotalShares,
                 getTotalLoot,
-                submitProposal,
+                submitLootProposal,
                 sponsorProposalViaSafe,
-                submitVote,
-                getProposalCount,
-                getAllProposals,
-                getProposalState,
-                processProposal,
+                submitBaalVote,
+                getBaalProposalCount,
+                getAllBaalProposals,
+                getBaalProposalState,
+                processBaalProposal,
                 cancelProposalViaSafe,
+                submitFeeProposal,
+                submitFeeVote,
+                executeFeeProposal,
+                getGovernanceProposalState,
                 wrapGovernanceToken,
                 getUserLootBalance,
                 getUserSharesBalance,
