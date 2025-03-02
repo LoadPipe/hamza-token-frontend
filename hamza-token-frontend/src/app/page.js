@@ -22,6 +22,7 @@ export default function HomePage() {
         submitBaalVote,
         cancelProposalViaSafe,
         wrapGovernanceToken,
+        unwrapGovernanceToken,
         getAllBaalProposals,
         getBaalProposalState,
         processBaalProposal,
@@ -293,6 +294,23 @@ export default function HomePage() {
         try {
             console.log('Wrapping ', amount, 'governance token...');
             const newAmount = await wrapGovernanceToken(amount);
+            setUserGovernanceTokenBalance(newAmount);
+        } catch (err) {
+            console.error('Error wrapping governance token:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Unwrap governance token
+    const handleUnwrapGovToken = async () => {
+        setLoading(true);
+        setError(null);
+        const amount = parseFloat(govTokenWrapAmount);
+        try {
+            console.log('Unwrapping ', amount, 'governance token...');
+            const newAmount = await unwrapGovernanceToken(amount);
             setUserGovernanceTokenBalance(newAmount);
         } catch (err) {
             console.error('Error wrapping governance token:', err);
@@ -824,7 +842,7 @@ export default function HomePage() {
                             value={govTokenWrapAmount}
                             onChange={(e) => {
                                 setGovTokenWrapAmount(
-                                    sanitizeNumber(e.target.value)
+                                    sanitizeNumber(e.target.value, true)
                                 );
                             }}
                             style={{ color: 'black' }}
@@ -837,6 +855,13 @@ export default function HomePage() {
                             isLoading={loading}
                         >
                             Wrap {govTokenWrapAmount} Governance Token
+                        </Button>
+                        <Button
+                            colorScheme="blue"
+                            onClick={handleUnwrapGovToken}
+                            isLoading={loading}
+                        >
+                            Unwrap {govTokenWrapAmount} Governance Token
                         </Button>
 
                         {/* Display errors */}
