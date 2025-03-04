@@ -7,6 +7,7 @@ import ERC20_ABI from '../../abis/ERC20_abi.json';
 import GovernanceTokenABI from '../../abis/GovernanceToken_abi.json';
 import SettingsContractABI from '../../abis/SystemSettings_abi.json';
 import GovernorContractABI from '../../abis/HamzaGovernor_abi.json';
+import GovernanceVaultABI from '../../abis/GovernanceVault_abi.json';
 
 const Web3Context = createContext();
 
@@ -16,7 +17,8 @@ export const Web3Provider = ({ children }) => {
     const [account, setAccount] = useState(null);
     const [baalContract, setBaalContract] = useState(null);
     const [settingsContract, setSettingsContract] = useState(null);
-    const [govTokenContract, setGovTokenContract] = useState(null);
+    const [governanceToken, setGovernanceToken] = useState(null);
+    const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
 
     const BAAL_CONTRACT_ADDRESS = '0x3410CA83D5902043C2C24760851033D304e94CF9'; // Baal contract
@@ -27,6 +29,8 @@ export const Web3Provider = ({ children }) => {
         '0xdefadc79d545866cfcca8164205284d5de698595'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
     const GOVERNOR_CONTRACT_ADDRESS =
         '0x3Db7C1a2bda3F478DF57B6833EC588be7Fa2dFD2';
+    const GOVERNANCE_VAULT_ADDRESS =
+        '0xca8B1a61acbf499d1b1ad1e2D6ad1f6516700bDf';
 
     useEffect(() => {
         const initWeb3 = async () => {
@@ -58,7 +62,7 @@ export const Web3Provider = ({ children }) => {
                     GovernanceTokenABI,
                     web3Signer
                 );
-                setGovTokenContract(govTokenContract);
+                setGovernanceToken(govTokenContract);
 
                 //load governance contract
                 const govContract = new ethers.Contract(
@@ -75,6 +79,14 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setSettingsContract(settingsContract);
+
+                //load governance vault contract
+                const govVaultContract = new ethers.Contract(
+                    GOVERNANCE_VAULT_ADDRESS,
+                    GovernanceVaultABI,
+                    web3Signer
+                );
+                setGovernanceVault(govVaultContract);
             } else {
                 console.error('No Ethereum wallet detected');
             }
@@ -448,14 +460,14 @@ export const Web3Provider = ({ children }) => {
         return 'Unknown';
     };
 
-    //returns the new balance
+    // Wraps loot token in governance token, returns the new balance
     const wrapGovernanceToken = async (amount) => {
-        if (!govTokenContract) return;
+        if (!governanceToken) return;
         try {
             const amountInWei = BigInt(
                 parseUnits(
                     amount.toString(),
-                    parseInt(await govTokenContract.decimals())
+                    parseInt(await governanceToken.decimals())
                 )
             );
             console.log('amount to wrap: ', amountInWei);
@@ -469,17 +481,48 @@ export const Web3Provider = ({ children }) => {
             //approve first
             console.log('approving...');
             let tx = await lootToken.approve(
-                GOVERNANCE_TOKEN_ADDRESS,
+                GOVERNANCE_VAULT_ADDRESS,
                 amountInWei
             );
             await tx.wait();
 
             //wrap token
             console.log('wrapping...');
-            tx = await govTokenContract.depositFor(account, amountInWei);
+            tx = await governanceVault.deposit(amountInWei);
             await tx.wait();
 
-            return await govTokenContract.balanceOf(account);
+            return await governanceToken.balanceOf(account);
+        } catch (error) {
+            console.error('Error wrapping governance token:', error);
+        }
+    };
+
+    // Unwraps governance token, returns the new balance
+    const unwrapGovernanceToken = async (amount) => {
+        if (!governanceToken) return;
+        try {
+            const amountInWei = BigInt(
+                parseUnits(
+                    amount.toString(),
+                    parseInt(await governanceToken.decimals())
+                )
+            );
+            console.log('amount to unwrap: ', amountInWei);
+
+            //approve first
+            console.log('approving...');
+            let tx = await governanceToken.approve(
+                GOVERNANCE_VAULT_ADDRESS,
+                amountInWei
+            );
+            await tx.wait();
+
+            //wrap token
+            console.log('unwrapping...');
+            tx = await governanceVault.withdraw(amountInWei);
+            await tx.wait();
+
+            return await governanceToken.balanceOf(account);
         } catch (error) {
             console.error('Error wrapping governance token:', error);
         }
@@ -521,12 +564,12 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getUserGovernanceTokenBalance = async (userAddress) => {
-        if (!govTokenContract || !provider) return '0';
+        if (!governanceToken || !provider) return '0';
         try {
-            const balance = await govTokenContract.balanceOf(userAddress);
+            const balance = await governanceToken.balanceOf(userAddress);
             return ethers.formatUnits(
                 balance,
-                parseInt(await govTokenContract.decimals())
+                parseInt(await governanceToken.decimals())
             );
         } catch (error) {
             console.error(
@@ -592,6 +635,7 @@ export const Web3Provider = ({ children }) => {
                 executeFeeProposal,
                 getGovernanceProposalState,
                 wrapGovernanceToken,
+                unwrapGovernanceToken,
                 getUserLootBalance,
                 getUserSharesBalance,
                 getUserGovernanceTokenBalance,
