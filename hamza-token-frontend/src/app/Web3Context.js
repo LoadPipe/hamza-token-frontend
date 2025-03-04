@@ -580,6 +580,48 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    const depositToBaalVault = async (tokenAddress, amount) => {
+        try {
+            if (!signer) {
+                throw new Error('No signer available');
+            }
+
+            // If depositing ETH (native token)
+            if (tokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
+                // Direct transfer to the safe
+                const tx = await signer.sendTransaction({
+                    to: GNOSIS_ADDRESS,
+                    value: parseEther(amount)
+                });
+                await tx.wait();
+                console.log('ETH deposited to Baal vault:', tx.hash);
+                return tx.hash;
+            } else {
+                // For ERC20 tokens
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ERC20_ABI,
+                    signer
+                );
+
+                // First approve the safe to spend tokens
+                const amountInWei = parseUnits(amount, await tokenContract.decimals());
+                const approveTx = await tokenContract.approve(GNOSIS_ADDRESS, amountInWei);
+                await approveTx.wait();
+                console.log('Approval tx:', approveTx.hash);
+
+                // Then transfer tokens to the safe
+                const transferTx = await tokenContract.transfer(GNOSIS_ADDRESS, amountInWei);
+                await transferTx.wait();
+                console.log('Tokens deposited to Baal vault:', transferTx.hash);
+                return transferTx.hash;
+            }
+        } catch (error) {
+            console.error('Error depositing to Baal vault:', error);
+            throw error;
+        }
+    };
+
     const getBaalConfig = async () => {
         if (!baalContract) return null;
         try {
@@ -639,6 +681,7 @@ export const Web3Provider = ({ children }) => {
                 getUserLootBalance,
                 getUserSharesBalance,
                 getUserGovernanceTokenBalance,
+                depositToBaalVault,
                 getBaalConfig,
             }}
         >

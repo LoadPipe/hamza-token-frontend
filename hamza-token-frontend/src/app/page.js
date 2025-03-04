@@ -9,6 +9,11 @@ import {
     Text,
     HStack,
     SimpleGrid,
+    FormControl,
+    FormLabel,
+    Input,
+    Select,
+    useToast,
 } from '@chakra-ui/react';
 import { useWeb3 } from './Web3Context';
 
@@ -34,7 +39,10 @@ export default function HomePage() {
         getGovernanceProposalState,
         getUserGovernanceTokenBalance,
         getBaalConfig,
+        depositToBaalVault,
     } = useWeb3();
+
+    const toast = useToast();
 
     // Toggles which section to display: "user" or "baal"
     const [viewMode, setViewMode] = useState('user');
@@ -63,6 +71,11 @@ export default function HomePage() {
     const [userSharesBalance, setUserSharesBalance] = useState('0');
     const [userGovernanceTokenBalance, setUserGovernanceTokenBalance] =
         useState('0');
+
+    // Add state for token deposit
+    const [depositTokenAddress, setDepositTokenAddress] = useState('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'); // Default to ETH
+    const [depositAmount, setDepositAmount] = useState('');
+    const [depositLoading, setDepositLoading] = useState(false);
 
     // -----------------------------
     // Fetch user balances
@@ -399,6 +412,37 @@ export default function HomePage() {
         return sanitized;
     };
 
+    const handleDepositToVault = async () => {
+        if (!depositAmount || parseFloat(depositAmount) <= 0) {
+            setError('Please enter a valid amount');
+            return;
+        }
+        
+        try {
+            setError(null);
+            setDepositLoading(true);
+            
+            const txHash = await depositToBaalVault(depositTokenAddress, depositAmount);
+            
+            console.log('Deposit transaction hash:', txHash);
+            setDepositAmount('');
+            
+            // Display success message
+            toast({
+                title: 'Deposit Successful',
+                description: `Successfully deposited tokens to the Baal vault.`,
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
+            });
+        } catch (err) {
+            console.error('Error depositing to vault:', err);
+            setError(`Error depositing to vault: ${err.message}`);
+        } finally {
+            setDepositLoading(false);
+        }
+    };
+
     return (
         <Box
             minHeight="100vh"
@@ -457,6 +501,50 @@ export default function HomePage() {
                     <Text fontSize="lg" textColor="white">
                         Your Shares Balance: {userSharesBalance}
                     </Text>
+
+                    {/* Add Token Deposit Section */}
+                    <Box
+                        borderWidth="1px"
+                        borderRadius="lg"
+                        p={6}
+                        boxShadow="md"
+                        bg="white"
+                    >
+                        <Heading size="md" mb={4} color="gray.800">
+                            Deposit Tokens to Baal Vault
+                        </Heading>
+                        <VStack spacing={4} align="stretch">
+                            <FormControl>
+                                <FormLabel color="gray.700">Token Type</FormLabel>
+                                <Select
+                                    value={depositTokenAddress}
+                                    onChange={(e) => setDepositTokenAddress(e.target.value)}
+                                    color="gray.800"
+                                >
+                                    <option value="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE">ETH (Native Token)</option>
+                                    <option value="0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa">HMZ (Governance Token)</option>
+                                    {/* Add more token options as needed */}
+                                </Select>
+                            </FormControl>
+                            <FormControl>
+                                <FormLabel color="gray.700">Amount</FormLabel>
+                                <Input
+                                    type="text"
+                                    value={depositAmount}
+                                    onChange={(e) => setDepositAmount(sanitizeNumber(e.target.value, true))}
+                                    placeholder="0.0"
+                                    color="gray.800"
+                                />
+                            </FormControl>
+                            <Button
+                                colorScheme="teal"
+                                isLoading={depositLoading}
+                                onClick={handleDepositToVault}
+                            >
+                                Deposit to Vault
+                            </Button>
+                        </VStack>
+                    </Box>
                 </VStack>
             )}
 
