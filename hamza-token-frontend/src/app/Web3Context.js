@@ -582,15 +582,18 @@ export const Web3Provider = ({ children }) => {
 
     const depositToBaalVault = async (tokenAddress, amount) => {
         try {
-            if (!signer) {
-                throw new Error('No signer available');
+            if (!signer || !baalContract) {
+                throw new Error('No signer or Baal contract available');
             }
 
+            // Get the target address from the Baal contract
+            const targetAddress = await baalContract.avatar();
+            
             // If depositing ETH (native token)
             if (tokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
-                // Direct transfer to the safe
+                // Direct transfer to the target address
                 const tx = await signer.sendTransaction({
-                    to: GNOSIS_ADDRESS,
+                    to: targetAddress,
                     value: parseEther(amount)
                 });
                 await tx.wait();
@@ -604,14 +607,14 @@ export const Web3Provider = ({ children }) => {
                     signer
                 );
 
-                // First approve the safe to spend tokens
+                // First approve the target address to spend tokens
                 const amountInWei = parseUnits(amount, await tokenContract.decimals());
-                const approveTx = await tokenContract.approve(GNOSIS_ADDRESS, amountInWei);
+                const approveTx = await tokenContract.approve(targetAddress, amountInWei);
                 await approveTx.wait();
                 console.log('Approval tx:', approveTx.hash);
 
-                // Then transfer tokens to the safe
-                const transferTx = await tokenContract.transfer(GNOSIS_ADDRESS, amountInWei);
+                // Then transfer tokens to the target address
+                const transferTx = await tokenContract.transfer(targetAddress, amountInWei);
                 await transferTx.wait();
                 console.log('Tokens deposited to Baal vault:', transferTx.hash);
                 return transferTx.hash;
@@ -655,6 +658,21 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    const getBaalVaultBalance = async () => {
+        if (!provider || !baalContract) return '0';
+        try {
+            // Get the avatar/target address from the Baal contract
+            const avatarAddress = await baalContract.avatar();
+            
+            // Get the ETH balance of the avatar (target) - this is what's used in ragequit
+            const balance = await provider.getBalance(avatarAddress);
+            return ethers.formatEther(balance);
+        } catch (error) {
+            console.error('Error fetching Baal vault balance:', error);
+            return '0';
+        }
+    };
+
     return (
         <Web3Context.Provider
             value={{
@@ -683,6 +701,7 @@ export const Web3Provider = ({ children }) => {
                 getUserGovernanceTokenBalance,
                 depositToBaalVault,
                 getBaalConfig,
+                getBaalVaultBalance,
             }}
         >
             {children}

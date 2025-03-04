@@ -40,6 +40,7 @@ export default function HomePage() {
         getUserGovernanceTokenBalance,
         getBaalConfig,
         depositToBaalVault,
+        getBaalVaultBalance,
     } = useWeb3();
 
     const toast = useToast();
@@ -50,6 +51,7 @@ export default function HomePage() {
     // Data states
     const [totalShares, setTotalShares] = useState('Loading...');
     const [totalLoot, setTotalLoot] = useState('Loading...');
+    const [vaultEthBalance, setVaultEthBalance] = useState('Loading...');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [baalProposals, setBaalProposals] = useState([]);
@@ -124,6 +126,20 @@ export default function HomePage() {
         };
         fetchData();
     }, [account, getTotalShares, getTotalLoot]);
+
+    // Add a separate effect for the vault balance
+    useEffect(() => {
+        const fetchVaultBalance = async () => {
+            if (!account) return;
+            try {
+                const vaultBalance = await getBaalVaultBalance();
+                setVaultEthBalance(vaultBalance);
+            } catch (error) {
+                console.error('Error fetching vault balance:', error);
+            }
+        };
+        fetchVaultBalance();
+    }, [account, getBaalVaultBalance]);
 
     // -----------------------------
     // Proposals
@@ -568,6 +584,9 @@ export default function HomePage() {
                         </Text>
                         <Text fontSize="lg" textColor="white">
                             Total Loot: {totalLoot}
+                        </Text>
+                        <Text fontSize="lg" textColor="white">
+                            Baal Vault ETH Balance: {vaultEthBalance} ETH
                         </Text>
                         <Button
                             colorScheme="blue"
