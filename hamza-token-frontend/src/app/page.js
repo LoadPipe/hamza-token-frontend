@@ -41,6 +41,7 @@ export default function HomePage() {
         getBaalConfig,
         depositToBaalVault,
         getBaalVaultBalance,
+        ragequitFromBaal,
     } = useWeb3();
 
     const toast = useToast();
@@ -78,6 +79,13 @@ export default function HomePage() {
     const [depositTokenAddress, setDepositTokenAddress] = useState('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'); // Default to ETH
     const [depositAmount, setDepositAmount] = useState('');
     const [depositLoading, setDepositLoading] = useState(false);
+    
+    // Rage Quit state variables
+    const [ragequitShares, setRagequitShares] = useState('');
+    const [ragequitLoot, setRagequitLoot] = useState('');
+    const [ragequitRecipient, setRagequitRecipient] = useState('');
+    const [selectedTokens, setSelectedTokens] = useState(['eth']);
+    const [ragequitLoading, setRagequitLoading] = useState(false);
 
     // -----------------------------
     // Fetch user balances
@@ -459,6 +467,99 @@ export default function HomePage() {
         }
     };
 
+    const handleRageQuit = async () => {
+        // Validate inputs
+        if ((!ragequitShares || parseFloat(ragequitShares) <= 0) && 
+            (!ragequitLoot || parseFloat(ragequitLoot) <= 0)) {
+            setError('Please enter a valid amount of shares or loot to burn');
+            return;
+        }
+        
+        if (!ragequitRecipient) {
+            setError('Please enter a recipient address');
+            return;
+        }
+        
+        if (selectedTokens.length === 0) {
+            setError('Please select at least one token to receive');
+            return;
+        }
+        
+        try {
+            setError(null);
+            setRagequitLoading(true);
+            
+            // Use the current account as recipient if not specified
+            const recipient = ragequitRecipient || account;
+            
+            // Default to 0 if empty
+            const sharesToBurn = ragequitShares || '0';
+            const lootToBurn = ragequitLoot || '0';
+            
+            // Fetch current balances to validate
+            let currentShares = '0';
+            let currentLoot = '0';
+            
+            if (account) {
+                currentShares = await getUserSharesBalance(account);
+                currentLoot = await getUserLootBalance(account);
+                
+                // Check if user has sufficient shares and loot
+                if (parseFloat(sharesToBurn) > parseFloat(currentShares)) {
+                    throw new Error(`You only have ${currentShares} shares available to burn`);
+                }
+                
+                if (parseFloat(lootToBurn) > parseFloat(currentLoot)) {
+                    throw new Error(`You only have ${currentLoot} loot available to burn`);
+                }
+            }
+            
+            // Convert token names to addresses
+            const tokenAddresses = selectedTokens.map(token => {
+                if (token.toLowerCase() === 'eth') {
+                    return 'eth'; // Special case for ETH, will be converted in the function
+                } else if (token.toLowerCase() === 'hmz') {
+                    return '0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa'; // HMZ token address
+                }
+                return token; // Already an address
+            });
+            
+            const txHash = await ragequitFromBaal(
+                recipient,
+                sharesToBurn,
+                lootToBurn,
+                tokenAddresses
+            );
+            
+            console.log('Rage quit transaction hash:', txHash);
+            
+            // Reset form fields
+            setRagequitShares('');
+            setRagequitLoot('');
+            setRagequitRecipient('');
+            
+            // Display success message
+            toast({
+                title: 'Rage Quit Successful',
+                description: `Successfully burned shares/loot and received tokens.`,
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
+            });
+            
+            // Refresh user balances
+            if (account) {
+                getUserSharesBalance(account).then(setUserSharesBalance);
+                getUserLootBalance(account).then(setUserLootBalance);
+            }
+        } catch (err) {
+            console.error('Error executing rage quit:', err);
+            setError(`Error executing rage quit: ${err.message}`);
+        } finally {
+            setRagequitLoading(false);
+        }
+    };
+
     return (
         <Box
             minHeight="100vh"
@@ -558,6 +659,114 @@ export default function HomePage() {
                                 onClick={handleDepositToVault}
                             >
                                 Deposit to Vault
+                            </Button>
+                        </VStack>
+                    </Box>
+
+                    {/* Rage Quit Box */}
+                    <Box
+                        borderWidth="1px"
+                        borderRadius="lg"
+                        p={6}
+                        boxShadow="md"
+                        bg="white"
+                    >
+                        <Heading size="md" mb={4} color="gray.800">
+                            Rage Quit (Exit DAO)
+                        </Heading>
+                        <VStack spacing={4} align="stretch">
+                            <FormControl>
+                                <FormLabel color="gray.700">Shares to Burn</FormLabel>
+                                <Text fontSize="sm" color="gray.600" mb={1}>
+                                    Your balance: {userSharesBalance || '0'} shares
+                                </Text>
+                                <HStack>
+                                    <Input
+                                        type="text"
+                                        value={ragequitShares}
+                                        onChange={(e) => setRagequitShares(sanitizeNumber(e.target.value, true))}
+                                        placeholder="0.0"
+                                        color="gray.800"
+                                    />
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => setRagequitShares(userSharesBalance)}
+                                        colorScheme="blue"
+                                    >
+                                        Max
+                                    </Button>
+                                </HStack>
+                            </FormControl>
+                            <FormControl>
+                                <FormLabel color="gray.700">Loot to Burn</FormLabel>
+                                <Text fontSize="sm" color="gray.600" mb={1}>
+                                    Your balance: {userLootBalance || '0'} loot
+                                </Text>
+                                <HStack>
+                                    <Input
+                                        type="text"
+                                        value={ragequitLoot}
+                                        onChange={(e) => setRagequitLoot(sanitizeNumber(e.target.value, true))}
+                                        placeholder="0.0"
+                                        color="gray.800"
+                                    />
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => setRagequitLoot(userLootBalance)}
+                                        colorScheme="blue"
+                                    >
+                                        Max
+                                    </Button>
+                                </HStack>
+                            </FormControl>
+                            <FormControl>
+                                <FormLabel color="gray.700">Recipient Address (Optional)</FormLabel>
+                                <Input
+                                    type="text"
+                                    value={ragequitRecipient}
+                                    onChange={(e) => setRagequitRecipient(e.target.value)}
+                                    placeholder="0x... (defaults to your address if empty)"
+                                    color="gray.800"
+                                />
+                            </FormControl>
+                            <FormControl>
+                                <FormLabel color="gray.700">Tokens to Receive</FormLabel>
+                                <HStack>
+                                    <Button
+                                        size="sm"
+                                        colorScheme={selectedTokens.includes('eth') ? "teal" : "gray"}
+                                        onClick={() => {
+                                            if (selectedTokens.includes('eth')) {
+                                                setSelectedTokens(selectedTokens.filter(t => t !== 'eth'));
+                                            } else {
+                                                setSelectedTokens([...selectedTokens, 'eth']);
+                                            }
+                                        }}
+                                    >
+                                        ETH
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        colorScheme={selectedTokens.includes('0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa') ? "teal" : "gray"}
+                                        onClick={() => {
+                                            const hmzAddress = '0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa';
+                                            if (selectedTokens.includes(hmzAddress)) {
+                                                setSelectedTokens(selectedTokens.filter(t => t !== hmzAddress));
+                                            } else {
+                                                setSelectedTokens([...selectedTokens, hmzAddress]);
+                                            }
+                                        }}
+                                    >
+                                        HMZ
+                                    </Button>
+                                </HStack>
+                            </FormControl>
+                            <Button
+                                colorScheme="red"
+                                isLoading={ragequitLoading}
+                                onClick={handleRageQuit}
+                            >
+                                Rage Quit
                             </Button>
                         </VStack>
                     </Box>

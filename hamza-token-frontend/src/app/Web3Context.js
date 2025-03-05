@@ -659,17 +659,49 @@ export const Web3Provider = ({ children }) => {
     };
 
     const getBaalVaultBalance = async () => {
-        if (!provider || !baalContract) return '0';
+        if (!provider || !baalContract) return "0";
         try {
-            // Get the avatar/target address from the Baal contract
-            const avatarAddress = await baalContract.avatar();
+            // Get the target (avatar) address from the Baal contract
+            const targetAddress = await baalContract.avatar();
             
-            // Get the ETH balance of the avatar (target) - this is what's used in ragequit
-            const balance = await provider.getBalance(avatarAddress);
+            // Get the ETH balance of the target address
+            const balance = await provider.getBalance(targetAddress);
             return ethers.formatEther(balance);
         } catch (error) {
-            console.error('Error fetching Baal vault balance:', error);
-            return '0';
+            console.error('Error getting Baal vault balance:', error);
+            return "0";
+        }
+    };
+
+    const ragequitFromBaal = async (toAddress, sharesToBurn, lootToBurn, tokens) => {
+        try {
+            if (!signer || !baalContract) {
+                throw new Error('No signer or Baal contract available');
+            }
+
+            // Format the amounts with 18 decimals (assuming both shares and loot have 18 decimals)
+            const formattedShares = ethers.parseUnits(sharesToBurn, 18);
+            const formattedLoot = lootToBurn;
+
+            // For ETH, we use the special address convention from the contract
+            const formattedTokens = tokens.map(token => 
+                token.toLowerCase() === 'eth' ? '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' : token
+            );
+
+            // Execute the ragequit transaction
+            const tx = await baalContract.ragequit(
+                toAddress, // Recipient address for the tokens
+                formattedLoot, // Amount of loot to burn
+                formattedShares, // Amount of shares to burn
+                formattedTokens // Array of token addresses to receive
+            );
+
+            const receipt = await tx.wait();
+            console.log('Ragequit successful:', receipt.hash);
+            return receipt.hash;
+        } catch (error) {
+            console.error('Error executing ragequit:', error);
+            throw error;
         }
     };
 
@@ -702,6 +734,7 @@ export const Web3Provider = ({ children }) => {
                 depositToBaalVault,
                 getBaalConfig,
                 getBaalVaultBalance,
+                ragequitFromBaal,
             }}
         >
             {children}
