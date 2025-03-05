@@ -21,16 +21,16 @@ export const Web3Provider = ({ children }) => {
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
 
-    const BAAL_CONTRACT_ADDRESS = '0x3410CA83D5902043C2C24760851033D304e94CF9'; // Baal contract
-    const GNOSIS_ADDRESS = '0xDD9f9570c2a8f8EB6a2aE001c224E226d77F0b63'; // hats admin multisig
+    const BAAL_CONTRACT_ADDRESS = '0xab710e8AA5f9C77E73627D42E5D410aAEB7da031'; // Baal contract
+    const GNOSIS_ADDRESS = '0x5600994767b8c67b8d00D4fCd0C62ed9C719bfee'; // hats admin multisig
     const GOVERNANCE_TOKEN_ADDRESS =
-        '0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa'; //TODO: get from config
+        '0xe4291E087CA40e8f78C48CB22836909a442Df646'; //TODO: get from config
     const SETTINGS_CONTRACT_ADDRESS =
-        '0xdefadc79d545866cfcca8164205284d5de698595'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
+        '0x6c8fB0e9cB7c415677Cbac742F55830A9A141bF6'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
     const GOVERNOR_CONTRACT_ADDRESS =
-        '0x3Db7C1a2bda3F478DF57B6833EC588be7Fa2dFD2';
+        '0x7137EdfC0e06349a4DB6B93F63ba892f5bCaF207';
     const GOVERNANCE_VAULT_ADDRESS =
-        '0xca8B1a61acbf499d1b1ad1e2D6ad1f6516700bDf';
+        '0x41dDDB7c0614e5818A52B1a6311B109fe56cF414';
 
     useEffect(() => {
         const initWeb3 = async () => {
@@ -679,21 +679,44 @@ export const Web3Provider = ({ children }) => {
                 throw new Error('No signer or Baal contract available');
             }
 
-            // Format the amounts with 18 decimals (assuming both shares and loot have 18 decimals)
-            const formattedShares = ethers.parseUnits(sharesToBurn, 18);
-            const formattedLoot = lootToBurn;
+            // If toAddress is empty, use the connected account
+            const recipient = toAddress || await signer.getAddress();
+            
+            console.log("Ragequit params:", {
+                recipient,  // Log the actual recipient that will be used
+                sharesToBurn,
+                lootToBurn,
+                tokens
+            });
+
+            // Convert to BigInt with exact 18 decimals (matching the contract expectation)
+            // Use ethers.parseUnits for consistent decimal handling
+            const sharesToBurnBN = ethers.parseUnits(sharesToBurn || '0', 18);
+            const lootToBurnBN = ethers.parseUnits(lootToBurn || '0', 18);
+
+            console.log("Parsed amounts:", {
+                sharesToBurnBN: sharesToBurnBN.toString(),
+                lootToBurnBN: lootToBurnBN.toString()
+            });
 
             // For ETH, we use the special address convention from the contract
             const formattedTokens = tokens.map(token => 
                 token.toLowerCase() === 'eth' ? '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' : token
             );
 
-            // Execute the ragequit transaction
+            console.log("Calling contract with:", {
+                recipient,  // Log the actual recipient
+                sharesToBurnBN: sharesToBurnBN.toString(),
+                lootToBurnBN: lootToBurnBN.toString(),
+                formattedTokens
+            });
+
+            // Execute the ragequit transaction exactly as the cast call does
             const tx = await baalContract.ragequit(
-                toAddress, // Recipient address for the tokens
-                formattedLoot, // Amount of loot to burn
-                formattedShares, // Amount of shares to burn
-                formattedTokens // Array of token addresses to receive
+                recipient,         // Use the recipient address that's been determined
+                sharesToBurnBN,    // Amount of shares to burn (0 in the working example)
+                lootToBurnBN,      // Amount of loot to burn (1e18 in the working example)
+                formattedTokens    // Array of token addresses to receive
             );
 
             const receipt = await tx.wait();

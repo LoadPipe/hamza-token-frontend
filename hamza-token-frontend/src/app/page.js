@@ -475,8 +475,8 @@ export default function HomePage() {
             return;
         }
         
-        if (!ragequitRecipient) {
-            setError('Please enter a recipient address');
+        if (!ragequitRecipient && !account) {
+            setError('Please connect your wallet or enter a recipient address');
             return;
         }
         
@@ -490,29 +490,23 @@ export default function HomePage() {
             setRagequitLoading(true);
             
             // Use the current account as recipient if not specified
-            const recipient = ragequitRecipient || account;
+            // The empty string check ensures we handle both empty strings and null/undefined
+            const recipient = ragequitRecipient || '';
             
             // Default to 0 if empty
             const sharesToBurn = ragequitShares || '0';
             const lootToBurn = ragequitLoot || '0';
             
-            // Fetch current balances to validate
-            let currentShares = '0';
-            let currentLoot = '0';
-            
-            if (account) {
-                currentShares = await getUserSharesBalance(account);
-                currentLoot = await getUserLootBalance(account);
-                
-                // Check if user has sufficient shares and loot
-                if (parseFloat(sharesToBurn) > parseFloat(currentShares)) {
-                    throw new Error(`You only have ${currentShares} shares available to burn`);
-                }
-                
-                if (parseFloat(lootToBurn) > parseFloat(currentLoot)) {
-                    throw new Error(`You only have ${currentLoot} loot available to burn`);
-                }
-            }
+            // Show informational toast about the process
+            toast({
+                title: 'Processing Rage Quit',
+                description: recipient 
+                    ? `Processing your rage quit to ${recipient.substring(0, 8)}...` 
+                    : `Processing your rage quit to your wallet`,
+                status: 'info',
+                duration: 5000,
+                isClosable: true,
+            });
             
             // Convert token names to addresses
             const tokenAddresses = selectedTokens.map(token => {
@@ -525,7 +519,7 @@ export default function HomePage() {
             });
             
             const txHash = await ragequitFromBaal(
-                recipient,
+                recipient, // Pass empty string if no recipient specified - Web3Context will use connected account
                 sharesToBurn,
                 lootToBurn,
                 tokenAddresses
@@ -721,11 +715,14 @@ export default function HomePage() {
                             </FormControl>
                             <FormControl>
                                 <FormLabel color="gray.700">Recipient Address (Optional)</FormLabel>
+                                <Text fontSize="sm" color="gray.600" mb={1}>
+                                    Will default to your address ({account ? `${account.substring(0, 6)}...${account.substring(account.length - 4)}` : 'Connect wallet'}) if left blank
+                                </Text>
                                 <Input
                                     type="text"
                                     value={ragequitRecipient}
                                     onChange={(e) => setRagequitRecipient(e.target.value)}
-                                    placeholder="0x... (defaults to your address if empty)"
+                                    placeholder="0x... (leave empty to use your address)"
                                     color="gray.800"
                                 />
                             </FormControl>
