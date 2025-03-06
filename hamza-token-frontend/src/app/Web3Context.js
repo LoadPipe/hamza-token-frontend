@@ -21,16 +21,16 @@ export const Web3Provider = ({ children }) => {
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
 
-    const BAAL_CONTRACT_ADDRESS = '0x3410CA83D5902043C2C24760851033D304e94CF9'; // Baal contract
-    const GNOSIS_ADDRESS = '0xDD9f9570c2a8f8EB6a2aE001c224E226d77F0b63'; // hats admin multisig
+    const BAAL_CONTRACT_ADDRESS = '0xab710e8AA5f9C77E73627D42E5D410aAEB7da031'; // Baal contract
+    const GNOSIS_ADDRESS = '0x5600994767b8c67b8d00D4fCd0C62ed9C719bfee'; // hats admin multisig
     const GOVERNANCE_TOKEN_ADDRESS =
-        '0x3a8d910889AE5B4658Cb9F2668584d1eb5fA86Fa'; //TODO: get from config
+        '0xe4291E087CA40e8f78C48CB22836909a442Df646'; //TODO: get from config
     const SETTINGS_CONTRACT_ADDRESS =
-        '0xdefadc79d545866cfcca8164205284d5de698595'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
+        '0x6c8fB0e9cB7c415677Cbac742F55830A9A141bF6'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
     const GOVERNOR_CONTRACT_ADDRESS =
-        '0x3Db7C1a2bda3F478DF57B6833EC588be7Fa2dFD2';
+        '0x7137EdfC0e06349a4DB6B93F63ba892f5bCaF207';
     const GOVERNANCE_VAULT_ADDRESS =
-        '0xca8B1a61acbf499d1b1ad1e2D6ad1f6516700bDf';
+        '0x41dDDB7c0614e5818A52B1a6311B109fe56cF414';
 
     useEffect(() => {
         const initWeb3 = async () => {
@@ -580,6 +580,51 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    const depositToBaalVault = async (tokenAddress, amount) => {
+        try {
+            if (!signer || !baalContract) {
+                throw new Error('No signer or Baal contract available');
+            }
+
+            // Get the target address from the Baal contract
+            const targetAddress = await baalContract.avatar();
+            
+            // If depositing ETH (native token)
+            if (tokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
+                // Direct transfer to the target address
+                const tx = await signer.sendTransaction({
+                    to: targetAddress,
+                    value: parseEther(amount)
+                });
+                await tx.wait();
+                console.log('ETH deposited to Baal vault:', tx.hash);
+                return tx.hash;
+            } else {
+                // For ERC20 tokens
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ERC20_ABI,
+                    signer
+                );
+
+                // First approve the target address to spend tokens
+                const amountInWei = parseUnits(amount, await tokenContract.decimals());
+                const approveTx = await tokenContract.approve(targetAddress, amountInWei);
+                await approveTx.wait();
+                console.log('Approval tx:', approveTx.hash);
+
+                // Then transfer tokens to the target address
+                const transferTx = await tokenContract.transfer(targetAddress, amountInWei);
+                await transferTx.wait();
+                console.log('Tokens deposited to Baal vault:', transferTx.hash);
+                return transferTx.hash;
+            }
+        } catch (error) {
+            console.error('Error depositing to Baal vault:', error);
+            throw error;
+        }
+    };
+
     const getBaalConfig = async () => {
         if (!baalContract) return null;
         try {
@@ -613,6 +658,76 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    const getBaalVaultBalance = async () => {
+        if (!provider || !baalContract) return "0";
+        try {
+            // Get the target (avatar) address from the Baal contract
+            const targetAddress = await baalContract.avatar();
+            
+            // Get the ETH balance of the target address
+            const balance = await provider.getBalance(targetAddress);
+            return ethers.formatEther(balance);
+        } catch (error) {
+            console.error('Error getting Baal vault balance:', error);
+            return "0";
+        }
+    };
+
+    const ragequitFromBaal = async (toAddress, sharesToBurn, lootToBurn, tokens) => {
+        try {
+            if (!signer || !baalContract) {
+                throw new Error('No signer or Baal contract available');
+            }
+
+            // If toAddress is empty, use the connected account
+            const recipient = toAddress || await signer.getAddress();
+            
+            console.log("Ragequit params:", {
+                recipient,  // Log the actual recipient that will be used
+                sharesToBurn,
+                lootToBurn,
+                tokens
+            });
+
+            // Convert to BigInt with exact 18 decimals (matching the contract expectation)
+            // Use ethers.parseUnits for consistent decimal handling
+            const sharesToBurnBN = ethers.parseUnits(sharesToBurn || '0', 18);
+            const lootToBurnBN = ethers.parseUnits(lootToBurn || '0', 18);
+
+            console.log("Parsed amounts:", {
+                sharesToBurnBN: sharesToBurnBN.toString(),
+                lootToBurnBN: lootToBurnBN.toString()
+            });
+
+            // For ETH, we use the special address convention from the contract
+            const formattedTokens = tokens.map(token => 
+                token.toLowerCase() === 'eth' ? '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' : token
+            );
+
+            console.log("Calling contract with:", {
+                recipient,  // Log the actual recipient
+                sharesToBurnBN: sharesToBurnBN.toString(),
+                lootToBurnBN: lootToBurnBN.toString(),
+                formattedTokens
+            });
+
+            // Execute the ragequit transaction exactly as the cast call does
+            const tx = await baalContract.ragequit(
+                recipient,         // Use the recipient address that's been determined
+                sharesToBurnBN,    // Amount of shares to burn (0 in the working example)
+                lootToBurnBN,      // Amount of loot to burn (1e18 in the working example)
+                formattedTokens    // Array of token addresses to receive
+            );
+
+            const receipt = await tx.wait();
+            console.log('Ragequit successful:', receipt.hash);
+            return receipt.hash;
+        } catch (error) {
+            console.error('Error executing ragequit:', error);
+            throw error;
+        }
+    };
+
     return (
         <Web3Context.Provider
             value={{
@@ -639,7 +754,10 @@ export const Web3Provider = ({ children }) => {
                 getUserLootBalance,
                 getUserSharesBalance,
                 getUserGovernanceTokenBalance,
+                depositToBaalVault,
                 getBaalConfig,
+                getBaalVaultBalance,
+                ragequitFromBaal,
             }}
         >
             {children}
