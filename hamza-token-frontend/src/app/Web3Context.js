@@ -11,6 +11,76 @@ import GovernanceVaultABI from '../../abis/GovernanceVault_abi.json';
 
 const Web3Context = createContext();
 
+// Function to parse the deploy.txt file and extract contract addresses
+const getContractAddressesFromFile = async () => {
+    try {
+        // Fetch the deploy.txt file
+        const response = await fetch('/deploy.txt');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch deploy.txt: ${response.status}`);
+        }
+        const data = await response.text();
+        
+        // Parse the file to extract addresses
+        const addresses = {
+            BAAL_CONTRACT_ADDRESS: null,
+            GNOSIS_ADDRESS: null,
+            GOVERNANCE_TOKEN_ADDRESS: null,
+            SETTINGS_CONTRACT_ADDRESS: null,
+            GOVERNOR_CONTRACT_ADDRESS: null,
+            GOVERNANCE_VAULT_ADDRESS: null,
+            LOOT_TOKEN_ADDRESS: null,
+            TIMELOCK_ADDRESS: null,
+            PURCHASE_TRACKER_ADDRESS: null,
+            PAYMENT_ESCROW_ADDRESS: null,
+            HATS_ADDRESS: null,
+            COMMUNITY_VAULT_ADDRESS: null
+        };
+        
+        // Extract addresses using regex
+        const baalMatch = data.match(/Baal \(Hamza Vault\) deployed at: (0x[a-fA-F0-9]{40})/);
+        if (baalMatch) addresses.BAAL_CONTRACT_ADDRESS = baalMatch[1];
+        
+        const gnosisMatch = data.match(/Gnosis Safe deployed at:\s+(0x[a-fA-F0-9]{40})/);
+        if (gnosisMatch) addresses.GNOSIS_ADDRESS = gnosisMatch[1];
+        
+        const govTokenMatch = data.match(/GovernanceToken deployed at: (0x[a-fA-F0-9]{40})/);
+        if (govTokenMatch) addresses.GOVERNANCE_TOKEN_ADDRESS = govTokenMatch[1];
+        
+        const settingsMatch = data.match(/SystemSettings deployed at: (0x[a-fA-F0-9]{40})/);
+        if (settingsMatch) addresses.SETTINGS_CONTRACT_ADDRESS = settingsMatch[1];
+        
+        const governorMatch = data.match(/Governor deployed at: (0x[a-fA-F0-9]{40})/);
+        if (governorMatch) addresses.GOVERNOR_CONTRACT_ADDRESS = governorMatch[1];
+        
+        const vaultMatch = data.match(/GovernanceVault deployed at: (0x[a-fA-F0-9]{40})/);
+        if (vaultMatch) addresses.GOVERNANCE_VAULT_ADDRESS = vaultMatch[1];
+        
+        const lootMatch = data.match(/Loot token address: (0x[a-fA-F0-9]{40})/);
+        if (lootMatch) addresses.LOOT_TOKEN_ADDRESS = lootMatch[1];
+        
+        const timelockMatch = data.match(/Timelock deployed at: (0x[a-fA-F0-9]{40})/);
+        if (timelockMatch) addresses.TIMELOCK_ADDRESS = timelockMatch[1];
+        
+        const purchaseTrackerMatch = data.match(/PurchaseTracker deployed at: (0x[a-fA-F0-9]{40})/);
+        if (purchaseTrackerMatch) addresses.PURCHASE_TRACKER_ADDRESS = purchaseTrackerMatch[1];
+        
+        const paymentEscrowMatch = data.match(/PaymentEscrow deployed at: (0x[a-fA-F0-9]{40})/);
+        if (paymentEscrowMatch) addresses.PAYMENT_ESCROW_ADDRESS = paymentEscrowMatch[1];
+        
+        const hatsMatch = data.match(/Hats Address is:\s+(0x[a-fA-F0-9]{40})/);
+        if (hatsMatch) addresses.HATS_ADDRESS = hatsMatch[1];
+        
+        const communityVaultMatch = data.match(/CommunityVault deployed at: (0x[a-fA-F0-9]{40})/);
+        if (communityVaultMatch) addresses.COMMUNITY_VAULT_ADDRESS = communityVaultMatch[1];
+        
+        console.log('Extracted addresses from deploy.txt:', addresses);
+        return addresses;
+    } catch (error) {
+        console.error('Error reading contract addresses from file:', error);
+    }
+};
+
 export const Web3Provider = ({ children }) => {
     const [provider, setProvider] = useState(null);
     const [signer, setSigner] = useState(null);
@@ -20,21 +90,22 @@ export const Web3Provider = ({ children }) => {
     const [governanceToken, setGovernanceToken] = useState(null);
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
+    const [contractAddresses, setContractAddresses] = useState(null);
 
-    const BAAL_CONTRACT_ADDRESS = '0xab710e8AA5f9C77E73627D42E5D410aAEB7da031'; // Baal contract
-    const GNOSIS_ADDRESS = '0x5600994767b8c67b8d00D4fCd0C62ed9C719bfee'; // hats admin multisig
-    const GOVERNANCE_TOKEN_ADDRESS =
-        '0xe4291E087CA40e8f78C48CB22836909a442Df646'; //TODO: get from config
-    const SETTINGS_CONTRACT_ADDRESS =
-        '0x6c8fB0e9cB7c415677Cbac742F55830A9A141bF6'; //'0x48D7096A4a09AdE9891E5753506DF2559EAFdad3';
-    const GOVERNOR_CONTRACT_ADDRESS =
-        '0x7137EdfC0e06349a4DB6B93F63ba892f5bCaF207';
-    const GOVERNANCE_VAULT_ADDRESS =
-        '0x41dDDB7c0614e5818A52B1a6311B109fe56cF414';
+    useEffect(() => {
+        // Load contract addresses from file
+        const loadAddresses = async () => {
+            const addresses = await getContractAddressesFromFile();
+            setContractAddresses(addresses);
+            console.log('Loaded contract addresses:', addresses);
+        };
+        
+        loadAddresses();
+    }, []);
 
     useEffect(() => {
         const initWeb3 = async () => {
-            if (window.ethereum) {
+            if (window.ethereum && contractAddresses && contractAddresses.BAAL_CONTRACT_ADDRESS) {
                 const browserProvider = new ethers.BrowserProvider(
                     window.ethereum
                 );
@@ -49,7 +120,7 @@ export const Web3Provider = ({ children }) => {
 
                 //load custom Baal
                 const baalContract = new ethers.Contract(
-                    BAAL_CONTRACT_ADDRESS,
+                    contractAddresses.BAAL_CONTRACT_ADDRESS,
                     CustomBaalABI,
                     web3Signer
                 );
@@ -58,7 +129,7 @@ export const Web3Provider = ({ children }) => {
 
                 //load governance token contract
                 const govTokenContract = new ethers.Contract(
-                    GOVERNANCE_TOKEN_ADDRESS,
+                    contractAddresses.GOVERNANCE_TOKEN_ADDRESS,
                     GovernanceTokenABI,
                     web3Signer
                 );
@@ -66,7 +137,7 @@ export const Web3Provider = ({ children }) => {
 
                 //load governance contract
                 const govContract = new ethers.Contract(
-                    GOVERNOR_CONTRACT_ADDRESS,
+                    contractAddresses.GOVERNOR_CONTRACT_ADDRESS,
                     GovernorContractABI,
                     web3Signer
                 );
@@ -74,7 +145,7 @@ export const Web3Provider = ({ children }) => {
 
                 //load system settings contract
                 const settingsContract = new ethers.Contract(
-                    SETTINGS_CONTRACT_ADDRESS,
+                    contractAddresses.SETTINGS_CONTRACT_ADDRESS,
                     SettingsContractABI,
                     web3Signer
                 );
@@ -82,17 +153,20 @@ export const Web3Provider = ({ children }) => {
 
                 //load governance vault contract
                 const govVaultContract = new ethers.Contract(
-                    GOVERNANCE_VAULT_ADDRESS,
+                    contractAddresses.GOVERNANCE_VAULT_ADDRESS,
                     GovernanceVaultABI,
                     web3Signer
                 );
                 setGovernanceVault(govVaultContract);
             } else {
-                console.error('No Ethereum wallet detected');
+                console.error('No Ethereum wallet detected or contract addresses not loaded');
             }
         };
-        initWeb3();
-    }, []);
+        
+        if (contractAddresses && contractAddresses.BAAL_CONTRACT_ADDRESS) {
+            initWeb3();
+        }
+    }, [contractAddresses]);
 
     const submitLootProposal = async (expiration = 0, baalGas = 1500000) => {
         if (!baalContract || !account) return;
@@ -108,12 +182,12 @@ export const Web3Provider = ({ children }) => {
             // 2. Wrap that call in an executeAsBaal call
             const executeAsBaalData = baalContract.interface.encodeFunctionData(
                 'executeAsBaal',
-                [BAAL_CONTRACT_ADDRESS, 0, mintLootData]
+                [contractAddresses.BAAL_CONTRACT_ADDRESS, 0, mintLootData]
             );
 
             const multisendPayload = await baalContract.encodeMultisend(
                 [mintLootData], // array of calls
-                BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
+                contractAddresses.BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
             );
 
             const tx = await baalContract.submitProposal(
@@ -177,7 +251,7 @@ export const Web3Provider = ({ children }) => {
             return;
         }
         const safeContract = new ethers.Contract(
-            GNOSIS_ADDRESS,
+            contractAddresses.GNOSIS_ADDRESS,
             GNOSIS_SAFE_ABI,
             signer
         );
@@ -212,7 +286,7 @@ export const Web3Provider = ({ children }) => {
                 [proposalId]
             );
             const receipt = await execSafeTransaction(
-                BAAL_CONTRACT_ADDRESS,
+                contractAddresses.BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -231,7 +305,7 @@ export const Web3Provider = ({ children }) => {
                 [proposalId, support]
             );
             const receipt = await execSafeTransaction(
-                BAAL_CONTRACT_ADDRESS,
+                contractAddresses.BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -305,12 +379,12 @@ export const Web3Provider = ({ children }) => {
             // 2. Wrap that call in an executeAsBaal call
             const executeAsBaalData = baalContract.interface.encodeFunctionData(
                 'executeAsBaal',
-                [BAAL_CONTRACT_ADDRESS, 0, mintLootData]
+                [contractAddresses.BAAL_CONTRACT_ADDRESS, 0, mintLootData]
             );
 
             const multisendPayload = await baalContract.encodeMultisend(
                 [mintLootData], // array of calls
-                BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
+                contractAddresses.BAAL_CONTRACT_ADDRESS // target address for each call (usually your Baal contract address)
             );
 
             const tx = await baalContract.processProposal(
@@ -333,7 +407,7 @@ export const Web3Provider = ({ children }) => {
                 [proposalId]
             );
             const receipt = await execSafeTransaction(
-                BAAL_CONTRACT_ADDRESS,
+                contractAddresses.BAAL_CONTRACT_ADDRESS,
                 0,
                 data
             );
@@ -355,7 +429,7 @@ export const Web3Provider = ({ children }) => {
             );
 
             const tx = await governorContract.propose(
-                [SETTINGS_CONTRACT_ADDRESS],
+                [contractAddresses.SETTINGS_CONTRACT_ADDRESS],
                 [0],
                 [setFeeData],
                 `Proposal to set fee to ${feeBps}`
@@ -424,7 +498,7 @@ export const Web3Provider = ({ children }) => {
 
             console.log('executing proposal...');
             const txExec = await governorContract.execute(
-                [SETTINGS_CONTRACT_ADDRESS],
+                [contractAddresses.SETTINGS_CONTRACT_ADDRESS],
                 [0],
                 [setFeeData],
                 ethers.keccak256(
@@ -481,7 +555,7 @@ export const Web3Provider = ({ children }) => {
             //approve first
             console.log('approving...');
             let tx = await lootToken.approve(
-                GOVERNANCE_VAULT_ADDRESS,
+                contractAddresses.GOVERNANCE_VAULT_ADDRESS,
                 amountInWei
             );
             await tx.wait();
@@ -512,7 +586,7 @@ export const Web3Provider = ({ children }) => {
             //approve first
             console.log('approving...');
             let tx = await governanceToken.approve(
-                GOVERNANCE_VAULT_ADDRESS,
+                contractAddresses.GOVERNANCE_VAULT_ADDRESS,
                 amountInWei
             );
             await tx.wait();
@@ -732,12 +806,10 @@ export const Web3Provider = ({ children }) => {
         <Web3Context.Provider
             value={{
                 account,
-                contract: baalContract,
-                provider,
-                signer,
+                submitLootProposal,
                 getTotalShares,
                 getTotalLoot,
-                submitLootProposal,
+                execSafeTransaction,
                 sponsorProposalViaSafe,
                 submitBaalVote,
                 getBaalProposalCount,
@@ -758,6 +830,7 @@ export const Web3Provider = ({ children }) => {
                 getBaalConfig,
                 getBaalVaultBalance,
                 ragequitFromBaal,
+                contractAddresses
             }}
         >
             {children}
@@ -766,3 +839,12 @@ export const Web3Provider = ({ children }) => {
 };
 
 export const useWeb3 = () => useContext(Web3Context);
+
+// Dedicated hook to access contract addresses only
+export const useContractAddresses = () => {
+    const context = useContext(Web3Context);
+    if (!context) {
+        throw new Error('useContractAddresses must be used within a Web3Provider');
+    }
+    return context.contractAddresses;
+};
