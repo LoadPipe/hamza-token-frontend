@@ -16,6 +16,8 @@ import {
     useToast,
 } from '@chakra-ui/react';
 import { useWeb3 } from './Web3Context';
+import { ethers } from 'ethers';
+import ERC20_ABI from '../../abis/ERC20_abi.json';
 
 export default function HomePage() {
     const {
@@ -42,6 +44,9 @@ export default function HomePage() {
         depositToBaalVault,
         getBaalVaultBalance,
         ragequitFromBaal,
+        getCommunityVaultBalance,
+        contractAddresses,
+        provider
     } = useWeb3();
 
     const toast = useToast();
@@ -86,6 +91,10 @@ export default function HomePage() {
     const [ragequitRecipient, setRagequitRecipient] = useState('');
     const [selectedTokens, setSelectedTokens] = useState(['eth']);
     const [ragequitLoading, setRagequitLoading] = useState(false);
+
+    // Update Community Vault states
+    const [lootTokenBalance, setLootTokenBalance] = useState('Loading...');
+    const [loadingCommunityVault, setLoadingCommunityVault] = useState(false);
 
     // -----------------------------
     // Fetch user balances
@@ -554,6 +563,71 @@ export default function HomePage() {
         }
     };
 
+    // Update function to fetch community vault loot token balance
+    const fetchCommunityVaultLootBalance = async () => {
+        try {
+            setLoadingCommunityVault(true);
+            if (!contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS) {
+                console.error('Loot token address not available');
+                setLootTokenBalance('Not available');
+                return;
+            }
+            
+            if (!provider) {
+                console.error('Web3 provider not available');
+                setLootTokenBalance('Provider not available');
+                return;
+            }
+            
+            console.log('Fetching balance for loot token:', contractAddresses.LOOT_TOKEN_ADDRESS);
+            const balance = await getCommunityVaultBalance(contractAddresses.LOOT_TOKEN_ADDRESS);
+            console.log('Raw balance from contract:', balance?.toString());
+            
+            if (!balance) {
+                setLootTokenBalance('0');
+                return;
+            }
+            
+            // Create a contract for the loot token to get decimals
+            try {
+                const lootTokenContract = new ethers.Contract(
+                    contractAddresses.LOOT_TOKEN_ADDRESS,
+                    ERC20_ABI,
+                    provider
+                );
+                const decimals = await lootTokenContract.decimals();
+                const symbol = await lootTokenContract.symbol();
+                const formattedBalance = ethers.formatUnits(balance, decimals);
+                setLootTokenBalance(formattedBalance);
+                console.log('Community Vault Loot Balance:', formattedBalance, symbol);
+            } catch (tokenError) {
+                console.error('Error processing token details:', tokenError);
+                // Fallback to default 18 decimals if we can't get the token decimals
+                const formattedBalance = ethers.formatUnits(balance, 18);
+                setLootTokenBalance(formattedBalance);
+            }
+        } catch (error) {
+            console.error('Error fetching community vault loot balance:', error);
+            setLootTokenBalance('Error loading');
+            toast({
+                title: 'Error',
+                description: 'Failed to fetch community vault loot balance: ' + error.message,
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setLoadingCommunityVault(false);
+        }
+    };
+
+    // Update effect to load only loot token balance
+    useEffect(() => {
+        if (viewMode === 'community-vault') {
+            fetchCommunityVaultLootBalance();
+        }
+    }, [viewMode, contractAddresses]);
+
     return (
         <Box
             minHeight="100vh"
@@ -591,6 +665,12 @@ export default function HomePage() {
                     onClick={() => setViewMode('fee')}
                 >
                     Set Fee
+                </Button>
+                <Button
+                    colorScheme={viewMode === 'community-vault' ? 'blue' : 'gray'}
+                    onClick={() => setViewMode('community-vault')}
+                >
+                    Community Vault
                 </Button>
             </HStack>
             {/* Conditionally render either "User Info" or "Baal Info" */}
@@ -754,6 +834,7 @@ export default function HomePage() {
                                             }
                                         }}
                                     >
+
                                         HMZ
                                     </Button>
                                 </HStack>
@@ -1185,6 +1266,87 @@ export default function HomePage() {
                         )}
                     </VStack>
                 </>
+            )}
+
+            {viewMode === 'community-vault' && (
+                <VStack spacing={6} width="100%" maxW="900px">
+                    <Heading textColor="white" size="xl">Community Vault</Heading>
+                    
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <VStack spacing={4} align="start">
+                            <Heading size="md" textColor="white">Vault Address</Heading>
+                            <Text textColor="white" wordBreak="break-all">
+                                {contractAddresses?.COMMUNITY_VAULT_ADDRESS || 'Not available'}
+                            </Text>
+                            
+                            <Heading size="md" textColor="white" mt={6}>Loot Token Balance</Heading>
+                            {loadingCommunityVault ? (
+                                <Text textColor="white">Loading loot balance...</Text>
+                            ) : (
+                                <VStack align="start" spacing={2} width="100%">
+                                    <HStack>
+                                        <Text textColor="white" fontSize="xl" fontWeight="bold">
+                                            {lootTokenBalance}
+                                        </Text>
+                                        <Text textColor="white">LOOT</Text>
+                                    </HStack>
+                                    
+                                    {lootTokenBalance === 'Not available' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Loot token address is not available. Contract might not be initialized correctly.
+                                        </Text>
+                                    )}
+                                    
+                                    {lootTokenBalance === 'Provider not available' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Web3 provider is not available. Please connect your wallet.
+                                        </Text>
+                                    )}
+                                    
+                                    {lootTokenBalance === 'Error loading' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Error loading balance. Check console for details.
+                                        </Text>
+                                    )}
+                                </VStack>
+                            )}
+                            
+                            <Button 
+                                mt={4}
+                                colorScheme="blue"
+                                onClick={fetchCommunityVaultLootBalance}
+                                isLoading={loadingCommunityVault}
+                            >
+                                Refresh Balance
+                            </Button>
+                        </VStack>
+                    </Box>
+                    
+                    {/* Debug information */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <Heading size="md" textColor="white" mb={4}>Debug Information</Heading>
+                        <VStack align="start" spacing={2}>
+                            <Text textColor="white">
+                                <strong>Loot Token Address:</strong> {contractAddresses?.LOOT_TOKEN_ADDRESS || 'Not available'}
+                            </Text>
+                            <Text textColor="white">
+                                <strong>Provider Connected:</strong> {provider ? 'Yes' : 'No'}
+                            </Text>
+                        </VStack>
+                    </Box>
+                </VStack>
             )}
         </Box>
     );

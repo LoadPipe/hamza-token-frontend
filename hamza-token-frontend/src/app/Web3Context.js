@@ -8,6 +8,7 @@ import GovernanceTokenABI from '../../abis/GovernanceToken_abi.json';
 import SettingsContractABI from '../../abis/SystemSettings_abi.json';
 import GovernorContractABI from '../../abis/HamzaGovernor_abi.json';
 import GovernanceVaultABI from '../../abis/GovernanceVault_abi.json';
+import CommunityVaultABI from '../../abis/CommunityVault_abi.json';
 
 const Web3Context = createContext();
 
@@ -91,6 +92,7 @@ export const Web3Provider = ({ children }) => {
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
     const [contractAddresses, setContractAddresses] = useState(null);
+    const [communityVault, setCommunityVault] = useState(null);
 
     useEffect(() => {
         // Load contract addresses from file
@@ -158,6 +160,14 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setGovernanceVault(govVaultContract);
+
+                //load community vault contract
+                const communityVaultContract = new ethers.Contract(
+                    contractAddresses.COMMUNITY_VAULT_ADDRESS,
+                    CommunityVaultABI,
+                    web3Signer
+                );
+                setCommunityVault(communityVaultContract);
             } else {
                 console.error('No Ethereum wallet detected or contract addresses not loaded');
             }
@@ -802,9 +812,29 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    // CommunityVault functions
+    const getCommunityVaultBalance = async (tokenAddress) => {
+        if (!communityVault || !tokenAddress) return null;
+        try {
+            const balance = await communityVault.getBalance(tokenAddress);
+            return balance;
+        } catch (error) {
+            console.error('Error getting community vault balance:', error);
+            return null;
+        }
+    };
+
+    const getCommunityVaultAllBalances = async () => {
+        // This function is no longer used and can be removed,
+        // but we'll keep it for backward compatibility
+        return [];
+    };
+
     return (
         <Web3Context.Provider
             value={{
+                provider,
+                signer,
                 account,
                 submitLootProposal,
                 getTotalShares,
@@ -830,7 +860,10 @@ export const Web3Provider = ({ children }) => {
                 getBaalConfig,
                 getBaalVaultBalance,
                 ragequitFromBaal,
-                contractAddresses
+                getCommunityVaultBalance,
+                getCommunityVaultAllBalances,
+                contractAddresses,
+                communityVault
             }}
         >
             {children}
