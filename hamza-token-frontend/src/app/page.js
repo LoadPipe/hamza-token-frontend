@@ -14,8 +14,10 @@ import {
     Input,
     Select,
     useToast,
+    Spinner,
 } from '@chakra-ui/react';
 import { useWeb3 } from './Web3Context';
+import { ethers } from 'ethers';
 
 export default function HomePage() {
     const {
@@ -42,6 +44,16 @@ export default function HomePage() {
         depositToBaalVault,
         getBaalVaultBalance,
         ragequitFromBaal,
+        getCommunityVaultBalance,
+        contractAddresses,
+        provider,
+        paymentEscrow,
+        createFakePayment,
+        releasePayment,
+        getPaymentDetails,
+        getUserPurchaseInfo,
+        getUserSalesInfo,
+        distributeRewards
     } = useWeb3();
 
     const toast = useToast();
@@ -87,6 +99,23 @@ export default function HomePage() {
     const [selectedTokens, setSelectedTokens] = useState(['eth']);
     const [ragequitLoading, setRagequitLoading] = useState(false);
 
+    // Update Community Vault states
+    const [lootTokenBalance, setLootTokenBalance] = useState('Loading...');
+    const [loadingCommunityVault, setLoadingCommunityVault] = useState(false);
+
+    // Payment Escrow simulator states
+    const [paymentReceiver, setPaymentReceiver] = useState('');
+    const [paymentAmount, setPaymentAmount] = useState('0.1');
+    const [paymentCurrency, setPaymentCurrency] = useState('ETH');
+    const [creatingPayment, setCreatingPayment] = useState(false);
+    const [payments, setPayments] = useState([]);
+    const [releasingPayment, setReleasingPayment] = useState(false);
+    const [purchaseInfo, setPurchaseInfo] = useState(null);
+    const [salesInfo, setSalesInfo] = useState(null);
+    const [loadingStats, setLoadingStats] = useState(false);
+    const [claimingRewards, setClaimingRewards] = useState(false);
+    const [loadingPayments, setLoadingPayments] = useState(false); // New state for payment history loading
+
     // -----------------------------
     // Fetch user balances
     // -----------------------------
@@ -106,6 +135,43 @@ export default function HomePage() {
         };
         fetchUserBalances();
     }, [account, getUserLootBalance, getUserSharesBalance]);
+
+    // -----------------------------
+    // Fetch Community Vault Loot balance
+    // -----------------------------
+    useEffect(() => {
+        fetchCommunityVaultLootBalance();
+    }, [contractAddresses]);
+
+    // Function to fetch the Community Vault's loot token balance
+    const fetchCommunityVaultLootBalance = async () => {
+        try {
+            setLoadingCommunityVault(true);
+            
+            if (!contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS || !contractAddresses.COMMUNITY_VAULT_ADDRESS) {
+                setLootTokenBalance('Not available');
+                return;
+            }
+            
+            if (!provider) {
+                setLootTokenBalance('Provider not available');
+                return;
+            }
+
+            const balance = await getCommunityVaultBalance(contractAddresses.LOOT_TOKEN_ADDRESS);
+            
+            if (balance) {
+                setLootTokenBalance(ethers.formatUnits(balance, 18));
+            } else {
+                setLootTokenBalance('Error loading');
+            }
+        } catch (error) {
+            console.error('Error fetching community vault loot balance:', error);
+            setLootTokenBalance('Error loading');
+        } finally {
+            setLoadingCommunityVault(false);
+        }
+    };
 
     // -----------------------------
     // Fetch Baal config
@@ -554,6 +620,295 @@ export default function HomePage() {
         }
     };
 
+    // Effect to load payment stats when the payments tab is viewed
+    useEffect(() => {
+        if (viewMode === 'payments' && account) {
+            fetchUserStats();
+            fetchPaymentHistory(); // Changed to fetch payment history from blockchain
+        }
+    }, [viewMode, account]);
+
+    // New function to fetch payment history from blockchain
+    const fetchPaymentHistory = async () => {
+        setLoadingPayments(true);
+        
+        try {
+            if (!account || !paymentEscrow) {
+                toast({
+                    title: "Wallet not connected",
+                    description: "Please connect your wallet first",
+                    status: "warning",
+                    duration: 3000,
+                    isClosable: true
+                });
+                setLoadingPayments(false);
+                return;
+            }
+            
+            // Get the provider to query for events
+            const provider = paymentEscrow.runner?.provider;
+            if (!provider) {
+                throw new Error('Provider not available');
+            }
+            
+            try {
+                // For demonstration purposes, we'll get a few recent payments
+                const currentBlock = await provider.getBlockNumber();
+                const fromBlock = Math.max(0, currentBlock - 10000); // Look back 10000 blocks
+                
+                // Create filter for PaymentReceived events
+                const filter = paymentEscrow.filters.PaymentReceived();
+                const logs = await provider.getLogs({
+                    fromBlock: fromBlock,
+                    toBlock: 'latest',
+                    address: paymentEscrow.target,
+                    topics: filter.topics
+                });
+                
+                // Process logs to get unique payment IDs
+                const uniquePaymentIds = new Set();
+                logs.forEach(log => {
+                    try {
+                        const decodedLog = paymentEscrow.interface.parseLog({
+                            topics: log.topics,
+                            data: log.data
+                        });
+                        uniquePaymentIds.add(decodedLog.args[0]); // Add payment ID to set
+                    } catch (error) {
+                        console.error('Error parsing log:', error);
+                    }
+                });
+                
+                // Convert to array and fetch details for each payment ID
+                const paymentPromises = Array.from(uniquePaymentIds).map(async (id) => {
+                    try {
+                        const details = await paymentEscrow.getPayment(id);
+                        
+                        // Skip invalid payments
+                        if (!details || details.id === ethers.ZeroHash) {
+                            return null;
+                        }
+                        
+                        const formattedAmount = details.currency === ethers.ZeroAddress 
+                            ? ethers.formatEther(details.amount)
+                            : ethers.formatUnits(details.amount, 6); // USDC has 6 decimals
+                            
+                        const currencyLabel = details.currency === ethers.ZeroAddress ? 'ETH' : 'USDC';
+                        
+                        return {
+                            id: id,
+                            payer: details.payer,
+                            receiver: details.receiver,
+                            amount: formattedAmount,
+                            currency: currencyLabel,
+                            released: details.released
+                        };
+                    } catch (error) {
+                        console.error(`Error fetching payment ${id}:`, error);
+                        return null;
+                    }
+                });
+                
+                // Wait for all payments to be fetched and filter out nulls
+                const fetchedPayments = (await Promise.all(paymentPromises))
+                    .filter(payment => payment !== null);
+                
+                if (fetchedPayments.length === 0) {
+                    toast({
+                        title: "No payments found",
+                        description: "No payment history available",
+                        status: "info",
+                        duration: 3000,
+                        isClosable: true
+                    });
+                } else {
+                    setPayments(fetchedPayments);
+                }
+            } catch (error) {
+                console.error("Error fetching blockchain data:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to fetch payment data from blockchain",
+                    status: "error",
+                    duration: 3000,
+                    isClosable: true
+                });
+            }
+        } catch (error) {
+            console.error("Error in fetchPaymentHistory:", error);
+            toast({
+                title: "Error",
+                description: "Failed to fetch payment history: " + error.message,
+                status: "error",
+                duration: 3000,
+                isClosable: true
+            });
+        } finally {
+            setLoadingPayments(false);
+        }
+    };
+
+    // Handler for creating a fake payment
+    const handleCreateFakePayment = async () => {
+        if (!account) {
+            toast({
+                title: 'Error',
+                description: 'Please connect your wallet',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+            return;
+        }
+
+        if (!paymentReceiver || !ethers.isAddress(paymentReceiver)) {
+            toast({
+                title: 'Error',
+                description: 'Please enter a valid receiver address',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+            return;
+        }
+
+        try {
+            setCreatingPayment(true);
+            const paymentId = await createFakePayment(paymentReceiver, paymentAmount, paymentCurrency);
+            
+            toast({
+                title: 'Payment Created',
+                description: `Payment ID: ${paymentId.substring(0, 10)}...`,
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
+            });
+            
+            // Clear the form
+            setPaymentReceiver('');
+            setPaymentAmount('0.1');
+            
+            // Refresh payment history after creating a new payment
+            await fetchPaymentHistory();
+            
+        } catch (error) {
+            console.error('Error creating payment:', error);
+            toast({
+                title: 'Error',
+                description: `Failed to create payment: ${error.message}`,
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setCreatingPayment(false);
+        }
+    };
+
+    // Handler for releasing a payment from escrow
+    const handleReleasePayment = async (paymentId) => {
+        if (!account) {
+            toast({
+                title: 'Error',
+                description: 'Please connect your wallet',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+            return;
+        }
+
+        try {
+            setReleasingPayment(paymentId); // Set the ID of the payment being released
+            await releasePayment(paymentId);
+            
+            toast({
+                title: 'Payment Released',
+                description: 'Payment has been released from escrow',
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
+            });
+            
+            // Refresh payment history and user stats after releasing a payment
+            fetchPaymentHistory();
+            fetchUserStats();
+            
+        } catch (error) {
+            console.error('Error releasing payment:', error);
+            toast({
+                title: 'Error',
+                description: `Failed to release payment: ${error.message}`,
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setReleasingPayment(false); // Reset loading state
+        }
+    };
+
+    // Function to fetch user purchase and sales stats
+    const fetchUserStats = async () => {
+        if (!account) return;
+        
+        try {
+            setLoadingStats(true);
+            const purchases = await getUserPurchaseInfo(account);
+            const sales = await getUserSalesInfo(account);
+            
+            setPurchaseInfo(purchases);
+            setSalesInfo(sales);
+        } catch (error) {
+            console.error('Error fetching user stats:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    };
+
+    // Handler for claiming rewards
+    const handleClaimRewards = async () => {
+        if (!account) {
+            toast({
+                title: 'Error',
+                description: 'Please connect your wallet',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+            return;
+        }
+
+        try {
+            setClaimingRewards(true);
+            await distributeRewards(account);
+            
+            toast({
+                title: 'Rewards Claimed',
+                description: 'Successfully claimed your rewards',
+                status: 'success',
+                duration: 5000,
+                isClosable: true,
+            });
+            
+            // Refresh user balances
+            if (account) {
+                getUserLootBalance(account).then(setUserLootBalance);
+            }
+        } catch (error) {
+            console.error('Error claiming rewards:', error);
+            toast({
+                title: 'Error',
+                description: `Failed to claim rewards: ${error.message}`,
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setClaimingRewards(false);
+        }
+    };
+
     return (
         <Box
             minHeight="100vh"
@@ -591,6 +946,18 @@ export default function HomePage() {
                     onClick={() => setViewMode('fee')}
                 >
                     Set Fee
+                </Button>
+                <Button
+                    colorScheme={viewMode === 'community-vault' ? 'blue' : 'gray'}
+                    onClick={() => setViewMode('community-vault')}
+                >
+                    Community Vault
+                </Button>
+                <Button
+                    colorScheme={viewMode === 'payments' ? 'blue' : 'gray'}
+                    onClick={() => setViewMode('payments')}
+                >
+                    Payment Simulator
                 </Button>
             </HStack>
             {/* Conditionally render either "User Info" or "Baal Info" */}
@@ -1185,6 +1552,307 @@ export default function HomePage() {
                         )}
                     </VStack>
                 </>
+            )}
+
+            {viewMode === 'community-vault' && (
+                <VStack spacing={6} width="100%" maxW="900px">
+                    <Heading textColor="white" size="xl">Community Vault</Heading>
+                    
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <VStack spacing={4} align="start">
+                            <Heading size="md" textColor="white">Vault Address</Heading>
+                            <Text textColor="white" wordBreak="break-all">
+                                {contractAddresses?.COMMUNITY_VAULT_ADDRESS || 'Not available'}
+                            </Text>
+                            
+                            <Heading size="md" textColor="white" mt={6}>Loot Token Balance</Heading>
+                            {loadingCommunityVault ? (
+                                <Text textColor="white">Loading loot balance...</Text>
+                            ) : (
+                                <VStack align="start" spacing={2} width="100%">
+                                    <HStack>
+                                        <Text textColor="white" fontSize="xl" fontWeight="bold">
+                                            {lootTokenBalance}
+                                        </Text>
+                                        <Text textColor="white">LOOT</Text>
+                                    </HStack>
+                                    
+                                    {lootTokenBalance === 'Not available' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Loot token address is not available. Contract might not be initialized correctly.
+                                        </Text>
+                                    )}
+                                    
+                                    {lootTokenBalance === 'Provider not available' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Web3 provider is not available. Please connect your wallet.
+                                        </Text>
+                                    )}
+                                    
+                                    {lootTokenBalance === 'Error loading' && (
+                                        <Text textColor="red.300" fontSize="sm">
+                                            Error loading balance. Check console for details.
+                                        </Text>
+                                    )}
+                                </VStack>
+                            )}
+                            
+                            <Button 
+                                mt={4}
+                                colorScheme="blue"
+                                onClick={fetchCommunityVaultLootBalance}
+                                isLoading={loadingCommunityVault}
+                            >
+                                Refresh Balance
+                            </Button>
+                        </VStack>
+                    </Box>
+                    
+                    {/* Debug information */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <Heading size="md" textColor="white" mb={4}>Debug Information</Heading>
+                        <VStack align="start" spacing={2}>
+                            <Text textColor="white">
+                                <strong>Loot Token Address:</strong> {contractAddresses?.LOOT_TOKEN_ADDRESS || 'Not available'}
+                            </Text>
+                            <Text textColor="white">
+                                <strong>Provider Connected:</strong> {provider ? 'Yes' : 'No'}
+                            </Text>
+                        </VStack>
+                    </Box>
+                </VStack>
+            )}
+
+            {viewMode === 'payments' && (
+                <VStack spacing={6} width="100%" maxW="900px">
+                    <Heading textColor="white" size="xl">Payment Simulator</Heading>
+                    
+                    {/* User Stats */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <Heading size="md" textColor="white" mb={4}>Your Activity Stats</Heading>
+                        
+                        {!account ? (
+                            <Text textColor="red.300">Please connect your wallet to view stats</Text>
+                        ) : loadingStats ? (
+                            <Text textColor="white">Loading stats...</Text>
+                        ) : (
+                            <SimpleGrid columns={2} spacing={6}>
+                                <VStack align="start" bg="gray.700" p={4} borderRadius="md">
+                                    <Text textColor="white" fontWeight="bold">Purchase History</Text>
+                                    <Text textColor="white">
+                                        Total Purchases: {purchaseInfo?.totalCount || '0'}
+                                    </Text>
+                                    <Text textColor="white">
+                                        Total Spent: {purchaseInfo?.totalAmount || '0'} ETH
+                                    </Text>
+                                </VStack>
+                                
+                                <VStack align="start" bg="gray.700" p={4} borderRadius="md">
+                                    <Text textColor="white" fontWeight="bold">Sales History</Text>
+                                    <Text textColor="white">
+                                        Total Sales: {salesInfo?.totalCount || '0'}
+                                    </Text>
+                                    <Text textColor="white">
+                                        Total Earned: {salesInfo?.totalAmount || '0'} ETH
+                                    </Text>
+                                </VStack>
+                            </SimpleGrid>
+                        )}
+                        
+                        <HStack mt={4} spacing={4}>
+                            <Button
+                                colorScheme="blue"
+                                onClick={fetchUserStats}
+                                isLoading={loadingStats}
+                            >
+                                Refresh Stats
+                            </Button>
+                            
+                            <Button
+                                colorScheme="green"
+                                onClick={handleClaimRewards}
+                                isLoading={claimingRewards}
+                                isDisabled={!account || (purchaseInfo?.totalCount === '0' && salesInfo?.totalCount === '0')}
+                            >
+                                Claim Rewards
+                            </Button>
+                        </HStack>
+                    </Box>
+                    
+                    {/* Create Payment Form */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <Heading size="md" textColor="white" mb={4}>Create Fake Payment</Heading>
+                        
+                        <VStack spacing={4} align="stretch">
+                            <FormControl>
+                                <FormLabel textColor="white">Receiver Address</FormLabel>
+                                <Input
+                                    value={paymentReceiver}
+                                    onChange={(e) => setPaymentReceiver(e.target.value)}
+                                    placeholder="0x..."
+                                    color="white"
+                                    bg="gray.700"
+                                />
+                            </FormControl>
+                            
+                            <FormControl>
+                                <FormLabel textColor="white">Amount</FormLabel>
+                                <Input
+                                    value={paymentAmount}
+                                    onChange={(e) => setPaymentAmount(sanitizeNumber(e.target.value, true))}
+                                    placeholder="0.1"
+                                    color="white"
+                                    bg="gray.700"
+                                />
+                            </FormControl>
+                            
+                            <FormControl>
+                                <FormLabel textColor="white">Currency</FormLabel>
+                                <Select
+                                    value={paymentCurrency}
+                                    onChange={(e) => setPaymentCurrency(e.target.value)}
+                                    color="white"
+                                    bg="gray.700"
+                                >
+                                    <option value="ETH">ETH</option>
+                                    <option value="USDC">USDC</option>
+                                </Select>
+                            </FormControl>
+                            
+                            <Button
+                                colorScheme="teal"
+                                onClick={handleCreateFakePayment}
+                                isLoading={creatingPayment}
+                                isDisabled={!account}
+                            >
+                                Create Payment
+                            </Button>
+                        </VStack>
+                    </Box>
+                    
+                    {/* Payment History */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <HStack justify="space-between" mb={4}>
+                            <Heading size="md" textColor="white">Payment History</Heading>
+                            <Button
+                                size="sm"
+                                colorScheme="blue"
+                                onClick={fetchPaymentHistory}
+                                isLoading={loadingPayments}
+                                leftIcon={<span role="img" aria-label="refresh">🔄</span>}
+                            >
+                                Refresh
+                            </Button>
+                        </HStack>
+                        
+                        {loadingPayments ? (
+                            <Spinner color="blue.500" />
+                        ) : payments.length === 0 ? (
+                            <Text textColor="white">No payment history found</Text>
+                        ) : (
+                            <VStack spacing={3} align="stretch" width="100%">
+                                {payments.map((payment, index) => (
+                                    <Box 
+                                        key={`payment-${payment.id}-${index}`} 
+                                        p={4} 
+                                        borderWidth="1px" 
+                                        borderRadius="md" 
+                                        backgroundColor="#1f2937" 
+                                        width="100%"
+                                    >
+                                        <VStack align="start" spacing={2} width="100%">
+                                            <HStack width="100%" justify="space-between">
+                                                <Text textColor="white" fontSize="sm" opacity="0.8">
+                                                    ID: {payment.id ? payment.id.substring(0, 8) + '...' : 'Unknown'}
+                                                </Text>
+                                                <Text 
+                                                    textColor={payment.released ? "green.300" : "yellow.300"}
+                                                    fontWeight="bold"
+                                                    fontSize="sm"
+                                                >
+                                                    {payment.released ? "RELEASED" : "IN ESCROW"}
+                                                </Text>
+                                            </HStack>
+                                            
+                                            <HStack width="100%" wrap="wrap" spacing={4}>
+                                                <VStack align="start" minW="140px">
+                                                    <Text textColor="gray.400" fontSize="xs">
+                                                        From
+                                                    </Text>
+                                                    <Text textColor="white">
+                                                        {payment.payer ? `${payment.payer.substring(0, 6)}...${payment.payer.substring(payment.payer.length - 4)}` : 'Unknown'}
+                                                    </Text>
+                                                </VStack>
+                                                
+                                                <VStack align="start" minW="140px">
+                                                    <Text textColor="gray.400" fontSize="xs">
+                                                        To
+                                                    </Text>
+                                                    <Text textColor="white">
+                                                        {payment.receiver ? `${payment.receiver.substring(0, 6)}...${payment.receiver.substring(payment.receiver.length - 4)}` : 'Unknown'}
+                                                    </Text>
+                                                </VStack>
+                                                
+                                                <VStack align="start" minW="100px">
+                                                    <Text textColor="gray.400" fontSize="xs">
+                                                        Amount
+                                                    </Text>
+                                                    <Text textColor="white" fontWeight="bold">
+                                                        {payment.amount} {payment.currency}
+                                                    </Text>
+                                                </VStack>
+                                            </HStack>
+                                            
+                                            {!payment.released && (
+                                                <Button
+                                                    mt={2}
+                                                    size="sm"
+                                                    colorScheme="blue"
+                                                    onClick={() => handleReleasePayment(payment.id)}
+                                                    isLoading={releasingPayment === payment.id}
+                                                    isDisabled={!account}
+                                                    width="100%"
+                                                >
+                                                    Release Payment
+                                                </Button>
+                                            )}
+                                        </VStack>
+                                    </Box>
+                                ))}
+                            </VStack>
+                        )}
+                    </Box>
+                </VStack>
             )}
         </Box>
     );

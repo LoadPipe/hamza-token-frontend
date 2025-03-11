@@ -8,6 +8,9 @@ import GovernanceTokenABI from '../../abis/GovernanceToken_abi.json';
 import SettingsContractABI from '../../abis/SystemSettings_abi.json';
 import GovernorContractABI from '../../abis/HamzaGovernor_abi.json';
 import GovernanceVaultABI from '../../abis/GovernanceVault_abi.json';
+import CommunityVaultABI from '../../abis/CommunityVault_abi.json';
+import PaymentEscrowABI from '../../abis/PaymentEscrow_abi.json';
+import PurchaseTrackerABI from '../../abis/PurchaseTracker_abi.json';
 
 const Web3Context = createContext();
 
@@ -91,6 +94,9 @@ export const Web3Provider = ({ children }) => {
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
     const [contractAddresses, setContractAddresses] = useState(null);
+    const [communityVault, setCommunityVault] = useState(null);
+    const [paymentEscrow, setPaymentEscrow] = useState(null);
+    const [purchaseTracker, setPurchaseTracker] = useState(null);
 
     useEffect(() => {
         // Load contract addresses from file
@@ -158,6 +164,30 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setGovernanceVault(govVaultContract);
+
+                //load community vault contract
+                const communityVaultContract = new ethers.Contract(
+                    contractAddresses.COMMUNITY_VAULT_ADDRESS,
+                    CommunityVaultABI,
+                    web3Signer
+                );
+                setCommunityVault(communityVaultContract);
+                
+                //load payment escrow contract
+                const paymentEscrowContract = new ethers.Contract(
+                    contractAddresses.PAYMENT_ESCROW_ADDRESS,
+                    PaymentEscrowABI,
+                    web3Signer
+                );
+                setPaymentEscrow(paymentEscrowContract);
+                
+                //load purchase tracker contract
+                const purchaseTrackerContract = new ethers.Contract(
+                    contractAddresses.PURCHASE_TRACKER_ADDRESS,
+                    PurchaseTrackerABI,
+                    web3Signer
+                );
+                setPurchaseTracker(purchaseTrackerContract);
             } else {
                 console.error('No Ethereum wallet detected or contract addresses not loaded');
             }
@@ -802,6 +832,139 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    // CommunityVault functions
+    const getCommunityVaultBalance = async (tokenAddress) => {
+        if (!communityVault || !tokenAddress) return null;
+        try {
+            const balance = await communityVault.getBalance(tokenAddress);
+            return balance;
+        } catch (error) {
+            console.error('Error getting community vault balance:', error);
+            return null;
+        }
+    };
+
+    // This function is no longer used and can be removed,
+    // but we'll keep it for backward compatibility
+    const getCommunityVaultAllBalances = async () => {
+        return [];
+    };
+
+    // PaymentEscrow Functions
+    const createFakePayment = async (receiver, amount, currencyType = 'ETH') => {
+        if (!paymentEscrow || !account) {
+            throw new Error('Escrow contract or account not available');
+        }
+
+        try {
+            const paymentId = ethers.id(Date.now().toString() + account);
+            
+            const paymentInput = {
+                id: paymentId,
+                payer: account,
+                receiver: receiver,
+                amount: currencyType === 'ETH' ? parseEther(amount) : parseUnits(amount, 6), // USDC has 6 decimals
+                currency: currencyType === 'ETH' ? ethers.ZeroAddress : '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' // Mock USDC address
+            };
+
+            let tx;
+            if (currencyType === 'ETH') {
+                tx = await paymentEscrow.placePayment(
+                    paymentInput,
+                    { value: paymentInput.amount }
+                );
+            } else {
+                // For USDC we would need to mock the token approval process
+                // In a real scenario, we would approve the token first
+                // For this demo, we'll just call the function directly since we're simulating
+                tx = await paymentEscrow.placePayment(paymentInput);
+            }
+            
+            await tx.wait();
+            return paymentId;
+        } catch (error) {
+            console.error('Error creating fake payment:', error);
+            throw error;
+        }
+    };
+
+    // Function to release a payment from escrow
+    const releasePayment = async (paymentId) => {
+        if (!paymentEscrow || !account) return;
+        
+        try {
+            const tx = await paymentEscrow.releaseEscrow(paymentId);
+            await tx.wait();
+            return tx.hash;
+        } catch (error) {
+            console.error('Error releasing payment:', error);
+            throw error;
+        }
+    };
+
+    // Function to get payment details
+    const getPaymentDetails = async (paymentId) => {
+        if (!paymentEscrow) return null;
+        
+        try {
+            const payment = await paymentEscrow.getPayment(paymentId);
+            return payment;
+        } catch (error) {
+            console.error('Error getting payment details:', error);
+            return null;
+        }
+    };
+
+    // Function to get user's purchase history from PurchaseTracker
+    const getUserPurchaseInfo = async (userAddress) => {
+        if (!purchaseTracker) return null;
+        
+        try {
+            const totalCount = await purchaseTracker.totalPurchaseCount(userAddress);
+            const totalAmount = await purchaseTracker.totalPurchaseAmount(userAddress);
+            
+            return {
+                totalCount: totalCount.toString(),
+                totalAmount: ethers.formatEther(totalAmount)
+            };
+        } catch (error) {
+            console.error('Error getting user purchase info:', error);
+            return null;
+        }
+    };
+
+    // Function to get user's sales history from PurchaseTracker
+    const getUserSalesInfo = async (userAddress) => {
+        if (!purchaseTracker) return null;
+        
+        try {
+            const totalCount = await purchaseTracker.totalSalesCount(userAddress);
+            const totalAmount = await purchaseTracker.totalSalesAmount(userAddress);
+            
+            return {
+                totalCount: totalCount.toString(),
+                totalAmount: ethers.formatEther(totalAmount)
+            };
+        } catch (error) {
+            console.error('Error getting user sales info:', error);
+            return null;
+        }
+    };
+
+    // Function to distribute rewards from PurchaseTracker
+    const distributeRewards = async (recipientAddress) => {
+        if (!purchaseTracker || !account) return;
+        
+        try {
+            const tx = await purchaseTracker.distributeReward(recipientAddress);
+            await tx.wait();
+            return tx.hash;
+        } catch (error) {
+            console.error('Error distributing rewards:', error);
+            throw error;
+        }
+    };
+
     return (
         <Web3Context.Provider
             value={{
@@ -830,7 +993,18 @@ export const Web3Provider = ({ children }) => {
                 getBaalConfig,
                 getBaalVaultBalance,
                 ragequitFromBaal,
-                contractAddresses
+                contractAddresses,
+                communityVault,
+                paymentEscrow,
+                purchaseTracker,
+                getCommunityVaultBalance,
+                getCommunityVaultAllBalances,
+                createFakePayment,
+                releasePayment,
+                getPaymentDetails,
+                getUserPurchaseInfo,
+                getUserSalesInfo,
+                distributeRewards
             }}
         >
             {children}
