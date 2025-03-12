@@ -420,27 +420,6 @@
   },
   {
     "type": "function",
-    "name": "testDistributeRewardsFailsIfNoPurchasesOrSales",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "testDistributeRewardsForBuyer",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "testDistributeRewardsForSeller",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "testFullReleaseRecordsPurchase",
     "inputs": [],
     "outputs": [],
@@ -448,7 +427,42 @@
   },
   {
     "type": "function",
+    "name": "testFullReleaseRecordsPurchaseMultipleEscrows",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testFullReleaseRecordsPurchaseMultiplePayments",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "testPartialRefundThenRelease",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testTestAbilityToAuthorizeEscrow",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testTestAbilityToDeauthorizeEscrow",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testUnauthorizedEscrow",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -482,6 +496,19 @@
   {
     "type": "function",
     "name": "userLootAmountFromConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "vaultLootAmountFromConfig",
     "inputs": [],
     "outputs": [
       {

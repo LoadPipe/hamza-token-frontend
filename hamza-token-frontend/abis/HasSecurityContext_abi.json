@@ -7,7 +7,7 @@
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "stateMutability": "view"
@@ -19,7 +19,7 @@
       {
         "name": "_securityContext",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "outputs": [],

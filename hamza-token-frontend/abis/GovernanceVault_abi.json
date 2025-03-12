@@ -3,6 +3,11 @@
     "type": "constructor",
     "inputs": [
       {
+        "name": "securityContext",
+        "type": "address",
+        "internalType": "contract ISecurityContext"
+      },
+      {
         "name": "lootTokenAddress",
         "type": "address",
         "internalType": "address"
@@ -145,7 +150,7 @@
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "stateMutability": "view"
@@ -170,7 +175,7 @@
       {
         "name": "_securityContext",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "outputs": [],

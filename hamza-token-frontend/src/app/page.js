@@ -53,7 +53,6 @@ export default function HomePage() {
         getPaymentDetails,
         getUserPurchaseInfo,
         getUserSalesInfo,
-        distributeRewards
     } = useWeb3();
 
     const toast = useToast();
@@ -113,7 +112,6 @@ export default function HomePage() {
     const [purchaseInfo, setPurchaseInfo] = useState(null);
     const [salesInfo, setSalesInfo] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
-    const [claimingRewards, setClaimingRewards] = useState(false);
     const [loadingPayments, setLoadingPayments] = useState(false); // New state for payment history loading
 
     // -----------------------------
@@ -624,11 +622,10 @@ export default function HomePage() {
     useEffect(() => {
         if (viewMode === 'payments' && account) {
             fetchUserStats();
-            fetchPaymentHistory(); // Changed to fetch payment history from blockchain
+            fetchPaymentHistory(); 
         }
     }, [viewMode, account]);
 
-    // New function to fetch payment history from blockchain
     const fetchPaymentHistory = async () => {
         setLoadingPayments(true);
         
@@ -665,33 +662,51 @@ export default function HomePage() {
                     topics: filter.topics
                 });
                 
+                console.log(`Found ${logs.length} payment logs`);
+                
                 // Process logs to get unique payment IDs
                 const uniquePaymentIds = new Set();
-                logs.forEach(log => {
+                for (const log of logs) {
                     try {
-                        const decodedLog = paymentEscrow.interface.parseLog({
+                        const parsedLog = paymentEscrow.interface.parseLog({
                             topics: log.topics,
                             data: log.data
                         });
-                        uniquePaymentIds.add(decodedLog.args[0]); // Add payment ID to set
+                        
+                        if (parsedLog && parsedLog.args && parsedLog.args.length > 0) {
+                            const paymentId = parsedLog.args[0];
+                            
+                            // Verify that it's a properly formatted
+                            if (typeof paymentId === 'string' && 
+                                paymentId.startsWith('0x') && 
+                                paymentId.length === 66) { 
+                                uniquePaymentIds.add(paymentId);
+                            } else {
+                                console.warn('Invalid payment ID format:', paymentId);
+                            }
+                        }
                     } catch (error) {
                         console.error('Error parsing log:', error);
                     }
-                });
+                }
+                
+                console.log(`Found ${uniquePaymentIds.size} unique payment IDs`);
                 
                 // Convert to array and fetch details for each payment ID
                 const paymentPromises = Array.from(uniquePaymentIds).map(async (id) => {
                     try {
+                        console.log(`Fetching payment details for ID: ${id}`);
                         const details = await paymentEscrow.getPayment(id);
                         
                         // Skip invalid payments
                         if (!details || details.id === ethers.ZeroHash) {
+                            console.log('Skipping invalid payment');
                             return null;
                         }
                         
                         const formattedAmount = details.currency === ethers.ZeroAddress 
                             ? ethers.formatEther(details.amount)
-                            : ethers.formatUnits(details.amount, 6); // USDC has 6 decimals
+                            : ethers.formatUnits(details.amount, 6); // USDC has 6 decimals (for futue)
                             
                         const currencyLabel = details.currency === ethers.ZeroAddress ? 'ETH' : 'USDC';
                         
@@ -709,7 +724,6 @@ export default function HomePage() {
                     }
                 });
                 
-                // Wait for all payments to be fetched and filter out nulls
                 const fetchedPayments = (await Promise.all(paymentPromises))
                     .filter(payment => payment !== null);
                 
@@ -774,17 +788,31 @@ export default function HomePage() {
 
         try {
             setCreatingPayment(true);
-            const paymentId = await createFakePayment(paymentReceiver, paymentAmount, paymentCurrency);
+            
+            // Generate a unique payment ID 
+            const timestamp = Date.now().toString();
+            const randomData = Math.random().toString();
+            const paymentIdInput = ethers.concat([
+                ethers.toUtf8Bytes(timestamp),
+                ethers.toUtf8Bytes(randomData),
+                ethers.getBytes(account)
+            ]);
+            
+            // Generate payment ID with keccak256 hash
+            const paymentId = ethers.keccak256(paymentIdInput);
+            
+            console.log('Generated payment ID:', paymentId);
+            
+            const paymentResult = await createFakePayment(paymentReceiver, paymentAmount, paymentCurrency);
             
             toast({
                 title: 'Payment Created',
-                description: `Payment ID: ${paymentId.substring(0, 10)}...`,
+                description: `Payment created successfully`,
                 status: 'success',
                 duration: 5000,
                 isClosable: true,
             });
             
-            // Clear the form
             setPaymentReceiver('');
             setPaymentAmount('0.1');
             
@@ -844,7 +872,7 @@ export default function HomePage() {
                 isClosable: true,
             });
         } finally {
-            setReleasingPayment(false); // Reset loading state
+            setReleasingPayment(false); 
         }
     };
 
@@ -863,49 +891,6 @@ export default function HomePage() {
             console.error('Error fetching user stats:', error);
         } finally {
             setLoadingStats(false);
-        }
-    };
-
-    // Handler for claiming rewards
-    const handleClaimRewards = async () => {
-        if (!account) {
-            toast({
-                title: 'Error',
-                description: 'Please connect your wallet',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-            });
-            return;
-        }
-
-        try {
-            setClaimingRewards(true);
-            await distributeRewards(account);
-            
-            toast({
-                title: 'Rewards Claimed',
-                description: 'Successfully claimed your rewards',
-                status: 'success',
-                duration: 5000,
-                isClosable: true,
-            });
-            
-            // Refresh user balances
-            if (account) {
-                getUserLootBalance(account).then(setUserLootBalance);
-            }
-        } catch (error) {
-            console.error('Error claiming rewards:', error);
-            toast({
-                title: 'Error',
-                description: `Failed to claim rewards: ${error.message}`,
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-            });
-        } finally {
-            setClaimingRewards(false);
         }
     };
 
@@ -1684,15 +1669,6 @@ export default function HomePage() {
                                 isLoading={loadingStats}
                             >
                                 Refresh Stats
-                            </Button>
-                            
-                            <Button
-                                colorScheme="green"
-                                onClick={handleClaimRewards}
-                                isLoading={claimingRewards}
-                                isDisabled={!account || (purchaseInfo?.totalCount === '0' && salesInfo?.totalCount === '0')}
-                            >
-                                Claim Rewards
                             </Button>
                         </HStack>
                     </Box>

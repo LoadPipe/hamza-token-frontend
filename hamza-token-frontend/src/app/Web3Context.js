@@ -817,10 +817,10 @@ export const Web3Provider = ({ children }) => {
 
             // Execute the ragequit transaction exactly as the cast call does
             const tx = await baalContract.ragequit(
-                recipient,         // Use the recipient address that's been determined
-                sharesToBurnBN,    // Amount of shares to burn (0 in the working example)
-                lootToBurnBN,      // Amount of loot to burn (1e18 in the working example)
-                formattedTokens    // Array of token addresses to receive
+                recipient,        
+                sharesToBurnBN,    
+                lootToBurnBN,      
+                formattedTokens    
             );
 
             const receipt = await tx.wait();
@@ -844,12 +844,6 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    // This function is no longer used and can be removed,
-    // but we'll keep it for backward compatibility
-    const getCommunityVaultAllBalances = async () => {
-        return [];
-    };
-
     // PaymentEscrow Functions
     const createFakePayment = async (receiver, amount, currencyType = 'ETH') => {
         if (!paymentEscrow || !account) {
@@ -857,7 +851,20 @@ export const Web3Provider = ({ children }) => {
         }
 
         try {
-            const paymentId = ethers.id(Date.now().toString() + account);
+            // Generate a proper bytes32 payment ID using keccak256 hash
+            // This ensures we have a valid format for the contract
+            const timestamp = Date.now().toString();
+            const randomData = Math.random().toString();
+            const paymentIdInput = ethers.concat([
+                ethers.toUtf8Bytes(timestamp),
+                ethers.toUtf8Bytes(randomData),
+                ethers.getBytes(account)
+            ]);
+            
+            // Use keccak256 to get a valid bytes32 hash
+            const paymentId = ethers.keccak256(paymentIdInput);
+            
+            console.log('Creating payment with ID:', paymentId);
             
             const paymentInput = {
                 id: paymentId,
@@ -951,20 +958,6 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
-    // Function to distribute rewards from PurchaseTracker
-    const distributeRewards = async (recipientAddress) => {
-        if (!purchaseTracker || !account) return;
-        
-        try {
-            const tx = await purchaseTracker.distributeReward(recipientAddress);
-            await tx.wait();
-            return tx.hash;
-        } catch (error) {
-            console.error('Error distributing rewards:', error);
-            throw error;
-        }
-    };
-
     return (
         <Web3Context.Provider
             value={{
@@ -998,13 +991,11 @@ export const Web3Provider = ({ children }) => {
                 paymentEscrow,
                 purchaseTracker,
                 getCommunityVaultBalance,
-                getCommunityVaultAllBalances,
                 createFakePayment,
                 releasePayment,
                 getPaymentDetails,
                 getUserPurchaseInfo,
-                getUserSalesInfo,
-                distributeRewards
+                getUserSalesInfo
             }}
         >
             {children}

@@ -423,7 +423,7 @@
     "name": "testDeployment",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -461,6 +461,19 @@
   {
     "type": "function",
     "name": "userLootAmountFromConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "vaultLootAmountFromConfig",
     "inputs": [],
     "outputs": [
       {
