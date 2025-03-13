@@ -20,6 +20,30 @@
   },
   {
     "type": "function",
+    "name": "getPurchaseAmountByCurrency",
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "currency",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPurchaseCount",
     "inputs": [
       {
@@ -43,6 +67,30 @@
     "inputs": [
       {
         "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getSalesAmountByCurrency",
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "currency",
         "type": "address",
         "internalType": "address"
       }
@@ -98,6 +146,11 @@
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "currency",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],

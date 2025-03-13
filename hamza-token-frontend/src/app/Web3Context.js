@@ -1047,41 +1047,72 @@ export const Web3Provider = ({ children }) => {
     };
 
     // Function to get user's purchase history from PurchaseTracker
-    const getUserPurchaseInfo = async (userAddress) => {
-        if (!purchaseTracker) return null;
+    const getUserPurchaseInfo = async (userAddress, currencyType = 'ETH') => {
+        if (!purchaseTracker || !userAddress) return { totalCount: '0', totalAmount: '0', currency: 'ETH' };
         
         try {
-            const totalCount = await purchaseTracker.totalPurchaseCount(userAddress);
-            const totalAmount = await purchaseTracker.totalPurchaseAmount(userAddress);
-
+            // Determine which currency address to use
+            const currencyAddress = currencyType === 'TEST_TOKEN' && contractAddresses?.TEST_TOKEN_ADDRESS
+                ? contractAddresses.TEST_TOKEN_ADDRESS
+                : ethers.ZeroAddress; // Default to ETH
             
+            console.log(`Fetching purchase info for ${userAddress} with currency ${currencyType} (${currencyAddress})`);
+            
+            // Get purchase count for all currencies
+            const totalCount = await purchaseTracker.getPurchaseCount(userAddress);
+            
+            // Get purchase amount by specific currency
+            const totalAmountByCurrency = await purchaseTracker.getPurchaseAmountByCurrency(userAddress, currencyAddress);
+            
+            console.log(`Total purchase count: ${totalCount}, amount by ${currencyType}: ${totalAmountByCurrency}`);
             
             return {
                 totalCount: totalCount.toString(),
-                totalAmount: ethers.formatEther(totalAmount)
-                
+                totalAmount: ethers.formatUnits(totalAmountByCurrency, 18),
+                currency: currencyType === 'TEST_TOKEN' ? 'TEST' : 'ETH'
             };
         } catch (error) {
-            console.error('Error getting user purchase info:', error);
-            return null;
+            console.error(`Error getting purchase info for ${currencyType}:`, error);
+            return { 
+                totalCount: '0', 
+                totalAmount: '0', 
+                currency: currencyType === 'TEST_TOKEN' ? 'TEST' : 'ETH' 
+            };
         }
     };
 
     // Function to get user's sales history from PurchaseTracker
-    const getUserSalesInfo = async (userAddress) => {
-        if (!purchaseTracker) return null;
+    const getUserSalesInfo = async (userAddress, currencyType = 'ETH') => {
+        if (!purchaseTracker || !userAddress) return { totalCount: '0', totalAmount: '0', currency: 'ETH' };
         
         try {
-            const totalCount = await purchaseTracker.totalSalesCount(userAddress);
-            const totalAmount = await purchaseTracker.totalSalesAmount(userAddress);
+            // Determine which currency address to use
+            const currencyAddress = currencyType === 'TEST_TOKEN' && contractAddresses?.TEST_TOKEN_ADDRESS
+                ? contractAddresses.TEST_TOKEN_ADDRESS
+                : ethers.ZeroAddress; // Default to ETH
+            
+            console.log(`Fetching sales info for ${userAddress} with currency ${currencyType} (${currencyAddress})`);
+            
+            // Get sales count for all currencies 
+            const totalCount = await purchaseTracker.getSalesCount(userAddress);
+            
+            // Get sales amount by specific currency
+            const totalAmountByCurrency = await purchaseTracker.getSalesAmountByCurrency(userAddress, currencyAddress);
+            
+            console.log(`Total sales count: ${totalCount}, amount by ${currencyType}: ${totalAmountByCurrency}`);
             
             return {
                 totalCount: totalCount.toString(),
-                totalAmount: ethers.formatEther(totalAmount)
+                totalAmount: ethers.formatUnits(totalAmountByCurrency, 18),
+                currency: currencyType === 'TEST_TOKEN' ? 'TEST' : 'ETH'
             };
         } catch (error) {
-            console.error('Error getting user sales info:', error);
-            return null;
+            console.error(`Error getting sales info for ${currencyType}:`, error);
+            return { 
+                totalCount: '0', 
+                totalAmount: '0', 
+                currency: currencyType === 'TEST_TOKEN' ? 'TEST' : 'ETH' 
+            };
         }
     };
 

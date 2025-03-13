@@ -12,13 +12,14 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
-import { useWeb3 } from '../../Web3Context';
+import { useWeb3, useContractAddresses } from '../../Web3Context';
 
 /**
  * Component for displaying global purchase history from the PurchaseTracker
  */
 const PurchaseHistoryList = () => {
   const { account, purchaseTracker } = useWeb3();
+  const contractAddresses = useContractAddresses();
   const toast = useToast();
   
   const [allPurchases, setAllPurchases] = useState([]);
@@ -53,9 +54,16 @@ const PurchaseHistoryList = () => {
         const paymentId = event.args[0];
         const buyer = event.args[1];
         const amount = event.args[2];
+        const currency = event.args[3]; // Extract currency address
         
         // Get the full purchase details including seller
         const purchase = await purchaseTracker.purchases(paymentId);
+        
+        // Determine if this is ETH or TEST token
+        const isTestToken = contractAddresses?.TEST_TOKEN_ADDRESS && 
+          currency.toLowerCase() === contractAddresses.TEST_TOKEN_ADDRESS.toLowerCase();
+        
+        const currencySymbol = isTestToken ? 'TEST' : 'ETH';
         
         return {
           id: paymentId,
@@ -63,7 +71,9 @@ const PurchaseHistoryList = () => {
           seller: purchase.seller,
           amount: ethers.formatEther(amount),
           timestamp: (await provider.getBlock(event.blockNumber)).timestamp,
-          blockNumber: event.blockNumber
+          blockNumber: event.blockNumber,
+          currency: currency,
+          currencySymbol: currencySymbol
         };
       }));
       
@@ -120,7 +130,7 @@ const PurchaseHistoryList = () => {
                     Transaction:
                   </Text>
                   <Badge colorScheme="green" mb={2}>
-                    Purchase Completed
+                    PURCHASE COMPLETED
                   </Badge>
                   
                   <Text textColor="white" fontWeight="bold" mt={2}>
@@ -143,7 +153,7 @@ const PurchaseHistoryList = () => {
                     Amount:
                   </Text>
                   <Text textColor="white" fontSize="lg" fontWeight="bold">
-                    {purchase.amount} ETH
+                    {purchase.amount} {purchase.currencySymbol}
                   </Text>
                   
                   <Text textColor="white" fontWeight="bold" mt={2}>
