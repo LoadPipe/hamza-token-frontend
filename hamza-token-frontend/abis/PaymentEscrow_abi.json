@@ -5,7 +5,7 @@
       {
         "name": "securityContext",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       },
       {
         "name": "settings_",
@@ -28,6 +28,69 @@
   {
     "type": "receive",
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "PermissionRefund",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "PermissionRelease",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "appointedAdmins",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "autoReleaseFlag",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -97,6 +160,53 @@
   },
   {
     "type": "function",
+    "name": "grantAdminPermission",
+    "inputs": [
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "permission",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "hasAdminPermission",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "permission",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pause",
     "inputs": [],
     "outputs": [],
@@ -111,6 +221,65 @@
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "payments",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountRefunded",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payerReleased",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "receiverReleased",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "released",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "currency",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -201,13 +370,31 @@
   },
   {
     "type": "function",
+    "name": "revokeAdminPermission",
+    "inputs": [
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "permission",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "securityContext",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "stateMutability": "view"
@@ -232,11 +419,24 @@
       {
         "name": "_securityContext",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settings",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ISystemSettings"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",

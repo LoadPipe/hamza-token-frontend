@@ -8,6 +8,9 @@ import GovernanceTokenABI from '../../abis/GovernanceToken_abi.json';
 import SettingsContractABI from '../../abis/SystemSettings_abi.json';
 import GovernorContractABI from '../../abis/HamzaGovernor_abi.json';
 import GovernanceVaultABI from '../../abis/GovernanceVault_abi.json';
+import CommunityVaultABI from '../../abis/CommunityVault_abi.json';
+import PaymentEscrowABI from '../../abis/PaymentEscrow_abi.json';
+import PurchaseTrackerABI from '../../abis/PurchaseTracker_abi.json';
 
 const Web3Context = createContext();
 
@@ -91,6 +94,9 @@ export const Web3Provider = ({ children }) => {
     const [governanceVault, setGovernanceVault] = useState(null);
     const [governorContract, setGovernorContract] = useState(null);
     const [contractAddresses, setContractAddresses] = useState(null);
+    const [communityVault, setCommunityVault] = useState(null);
+    const [paymentEscrow, setPaymentEscrow] = useState(null);
+    const [purchaseTracker, setPurchaseTracker] = useState(null);
 
     useEffect(() => {
         // Load contract addresses from file
@@ -158,6 +164,30 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setGovernanceVault(govVaultContract);
+
+                //load community vault contract
+                const communityVaultContract = new ethers.Contract(
+                    contractAddresses.COMMUNITY_VAULT_ADDRESS,
+                    CommunityVaultABI,
+                    web3Signer
+                );
+                setCommunityVault(communityVaultContract);
+                
+                //load payment escrow contract
+                const paymentEscrowContract = new ethers.Contract(
+                    contractAddresses.PAYMENT_ESCROW_ADDRESS,
+                    PaymentEscrowABI,
+                    web3Signer
+                );
+                setPaymentEscrow(paymentEscrowContract);
+                
+                //load purchase tracker contract
+                const purchaseTrackerContract = new ethers.Contract(
+                    contractAddresses.PURCHASE_TRACKER_ADDRESS,
+                    PurchaseTrackerABI,
+                    web3Signer
+                );
+                setPurchaseTracker(purchaseTrackerContract);
             } else {
                 console.error('No Ethereum wallet detected or contract addresses not loaded');
             }
@@ -787,10 +817,10 @@ export const Web3Provider = ({ children }) => {
 
             // Execute the ragequit transaction exactly as the cast call does
             const tx = await baalContract.ragequit(
-                recipient,         // Use the recipient address that's been determined
-                sharesToBurnBN,    // Amount of shares to burn (0 in the working example)
-                lootToBurnBN,      // Amount of loot to burn (1e18 in the working example)
-                formattedTokens    // Array of token addresses to receive
+                recipient,        
+                sharesToBurnBN,    
+                lootToBurnBN,      
+                formattedTokens    
             );
 
             const receipt = await tx.wait();
@@ -799,6 +829,152 @@ export const Web3Provider = ({ children }) => {
         } catch (error) {
             console.error('Error executing ragequit:', error);
             throw error;
+        }
+    };
+
+    // CommunityVault functions
+    const getCommunityVaultBalance = async (tokenAddress) => {
+        if (!communityVault || !tokenAddress) return null;
+        try {
+            const balance = await communityVault.getBalance(tokenAddress);
+            return balance;
+        } catch (error) {
+            console.error('Error getting community vault balance:', error);
+            return null;
+        }
+    };
+
+    // PaymentEscrow Functions
+    const createFakePayment = async (receiver, amount, currencyType = 'ETH') => {
+        if (!paymentEscrow || !account) {
+            throw new Error('Escrow contract or account not available');
+        }
+
+        try {
+            // Generate a proper bytes32 payment ID using keccak256 hash
+            // This ensures we have a valid format for the contract
+            const timestamp = Date.now().toString();
+            const randomData = Math.random().toString();
+            const paymentIdInput = ethers.concat([
+                ethers.toUtf8Bytes(timestamp),
+                ethers.toUtf8Bytes(randomData),
+                ethers.getBytes(account)
+            ]);
+            
+            // Use keccak256 to get a valid bytes32 hash
+            const paymentId = ethers.keccak256(paymentIdInput);
+            
+            console.log('Creating payment with ID:', paymentId);
+            
+            const paymentInput = {
+                id: paymentId,
+                payer: account,
+                receiver: receiver,
+                amount: currencyType === 'ETH' ? parseEther(amount) : parseUnits(amount, 6), // USDC has 6 decimals
+                currency: currencyType === 'ETH' ? ethers.ZeroAddress : '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' // Mock USDC address
+            };
+
+            let tx;
+            if (currencyType === 'ETH') {
+                tx = await paymentEscrow.placePayment(
+                    paymentInput,
+                    { value: paymentInput.amount }
+                );
+            } else {
+                // For USDC we would need to mock the token approval process
+                // In a real scenario, we would approve the token first
+                // For this demo, we'll just call the function directly since we're simulating
+                tx = await paymentEscrow.placePayment(paymentInput);
+            }
+            
+            await tx.wait();
+            return paymentId;
+        } catch (error) {
+            console.error('Error creating fake payment:', error);
+            throw error;
+        }
+    };
+
+    // Function to release a payment from escrow
+    const releasePayment = async (paymentId) => {
+        if (!paymentEscrow || !account) return;
+        
+        try {
+            const tx = await paymentEscrow.releaseEscrow(paymentId);
+            await tx.wait();
+            return tx.hash;
+        } catch (error) {
+            console.error('Error releasing payment:', error);
+            throw error;
+        }
+    };
+
+    // Function to get payment details
+    const getPaymentDetails = async (paymentId) => {
+        if (!paymentEscrow) return null;
+        
+        try {
+            const payment = await paymentEscrow.getPayment(paymentId);
+            return payment;
+        } catch (error) {
+            console.error('Error getting payment details:', error);
+            return null;
+        }
+    };
+
+    // Function to get user's purchase history from PurchaseTracker
+    const getUserPurchaseInfo = async (userAddress) => {
+        if (!purchaseTracker) return null;
+        
+        try {
+            const totalCount = await purchaseTracker.totalPurchaseCount(userAddress);
+            const totalAmount = await purchaseTracker.totalPurchaseAmount(userAddress);
+            
+            return {
+                totalCount: totalCount.toString(),
+                totalAmount: ethers.formatEther(totalAmount)
+            };
+        } catch (error) {
+            console.error('Error getting user purchase info:', error);
+            return null;
+        }
+    };
+
+    // Function to get user's sales history from PurchaseTracker
+    const getUserSalesInfo = async (userAddress) => {
+        if (!purchaseTracker) return null;
+        
+        try {
+            const totalCount = await purchaseTracker.totalSalesCount(userAddress);
+            const totalAmount = await purchaseTracker.totalSalesAmount(userAddress);
+            
+            return {
+                totalCount: totalCount.toString(),
+                totalAmount: ethers.formatEther(totalAmount)
+            };
+        } catch (error) {
+            console.error('Error getting user sales info:', error);
+            return null;
+        }
+    };
+
+    // Function to get the community vault's loot token balance
+    //TODO: update smart contract logic so get balances work properly
+    const getCommunityVaultLootBalance = async () => {
+        if (!communityVault || !contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS) {
+            return null;
+        }
+        
+        try {
+            // just use the getUserLootBalance function to get the balance
+            const balance = await getUserLootBalance(contractAddresses.COMMUNITY_VAULT_ADDRESS);
+            return {
+                raw: balance,
+                formatted: balance
+            };
+        } catch (error) {
+            console.error('Error fetching community vault loot balance:', error);
+            return null;
         }
     };
 
@@ -830,7 +1006,17 @@ export const Web3Provider = ({ children }) => {
                 getBaalConfig,
                 getBaalVaultBalance,
                 ragequitFromBaal,
-                contractAddresses
+                contractAddresses,
+                communityVault,
+                paymentEscrow,
+                purchaseTracker,
+                getCommunityVaultBalance,
+                createFakePayment,
+                releasePayment,
+                getPaymentDetails,
+                getUserPurchaseInfo,
+                getUserSalesInfo,
+                getCommunityVaultLootBalance
             }}
         >
             {children}

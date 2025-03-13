@@ -16,6 +16,19 @@
   },
   {
     "type": "function",
+    "name": "claimRewards",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "deposit",
     "inputs": [
       {
@@ -50,6 +63,24 @@
         "name": "amounts",
         "type": "uint256[]",
         "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "distributeRewards",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "recipients",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "outputs": [],
@@ -102,16 +133,66 @@
   },
   {
     "type": "function",
+    "name": "rewardsCalculator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ICommunityRewardsCalculator"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rewardsDistributed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "securityContext",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setCommunityRewardsCalculator",
+    "inputs": [
+      {
+        "name": "calculator",
+        "type": "address",
+        "internalType": "contract ICommunityRewardsCalculator"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -139,11 +220,6 @@
         "name": "_purchaseTracker",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "lootToken",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -156,7 +232,7 @@
       {
         "name": "_securityContext",
         "type": "address",
-        "internalType": "contract IHatsSecurityContext"
+        "internalType": "contract ISecurityContext"
       }
     ],
     "outputs": [],
