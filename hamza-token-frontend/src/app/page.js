@@ -15,6 +15,8 @@ import {
     Select,
     useToast,
     Spinner,
+    Center,
+    Badge,
 } from '@chakra-ui/react';
 import { useWeb3 } from './Web3Context';
 import { ethers } from 'ethers';
@@ -53,6 +55,7 @@ export default function HomePage() {
         getPaymentDetails,
         getUserPurchaseInfo,
         getUserSalesInfo,
+        purchaseTracker,
     } = useWeb3();
 
     const toast = useToast();
@@ -113,6 +116,8 @@ export default function HomePage() {
     const [salesInfo, setSalesInfo] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
     const [loadingPayments, setLoadingPayments] = useState(false); // New state for payment history loading
+    const [allPurchases, setAllPurchases] = useState([]);
+    const [loadingAllPurchases, setLoadingAllPurchases] = useState(false);
 
     // -----------------------------
     // Fetch user balances
@@ -622,7 +627,8 @@ export default function HomePage() {
     useEffect(() => {
         if (viewMode === 'payments' && account) {
             fetchUserStats();
-            fetchPaymentHistory(); 
+            fetchPaymentHistory();
+            fetchAllPurchases();
         }
     }, [viewMode, account]);
 
@@ -891,6 +897,66 @@ export default function HomePage() {
             console.error('Error fetching user stats:', error);
         } finally {
             setLoadingStats(false);
+        }
+    };
+
+    const fetchAllPurchases = async () => {
+        if (!account || !purchaseTracker) {
+            return;
+        }
+
+        setLoadingAllPurchases(true);
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const filter = purchaseTracker.filters.PurchaseRecorded();
+            
+            // Get the events from the last 10000 blocks
+            const blockNumber = await provider.getBlockNumber();
+            const fromBlock = Math.max(0, blockNumber - 10000);
+            
+            const events = await purchaseTracker.queryFilter(filter, fromBlock);
+            
+            // Process the events to get purchase details
+            const purchasesData = await Promise.all(events.map(async (event) => {
+                const paymentId = event.args[0];
+                const buyer = event.args[1];
+                const amount = event.args[2];
+                
+                // Get the full purchase details including seller
+                const purchase = await purchaseTracker.purchases(paymentId);
+                
+                return {
+                    id: paymentId,
+                    buyer: buyer,
+                    seller: purchase.seller,
+                    amount: ethers.formatEther(amount),
+                    timestamp: (await provider.getBlock(event.blockNumber)).timestamp,
+                    blockNumber: event.blockNumber
+                };
+            }));
+            
+            // Sort by block number (descending) to show newest first
+            purchasesData.sort((a, b) => b.blockNumber - a.blockNumber);
+            
+            setAllPurchases(purchasesData);
+            toast({
+                title: "Purchases loaded",
+                description: `Loaded ${purchasesData.length} purchases from blockchain`,
+                status: "success",
+                duration: 5000,
+                isClosable: true,
+            });
+        } catch (error) {
+            console.error("Error fetching all purchases:", error);
+            toast({
+                title: "Error loading purchases",
+                description: error.message,
+                status: "error",
+                duration: 5000,
+                isClosable: true,
+            });
+        } finally {
+            setLoadingAllPurchases(false);
         }
     };
 
@@ -1632,7 +1698,7 @@ export default function HomePage() {
                         bg="gray.800"
                         width="100%"
                     >
-                        <Heading size="md" textColor="white" mb={4}>Your Activity Stats</Heading>
+                        <Heading size="md" textColor="white" mb={4}>Your Activity Stats (From PurchaseTracker)</Heading>
                         
                         {!account ? (
                             <Text textColor="red.300">Please connect your wallet to view stats</Text>
@@ -1662,18 +1728,17 @@ export default function HomePage() {
                             </SimpleGrid>
                         )}
                         
-                        <HStack mt={4} spacing={4}>
-                            <Button
-                                colorScheme="blue"
-                                onClick={fetchUserStats}
-                                isLoading={loadingStats}
-                            >
-                                Refresh Stats
-                            </Button>
-                        </HStack>
+                        <Button 
+                            mt={4} 
+                            onClick={fetchUserStats} 
+                            isLoading={loadingStats}
+                            colorScheme="blue"
+                        >
+                            Refresh Stats
+                        </Button>
                     </Box>
                     
-                    {/* Create Payment Form */}
+                    {/* Fake Payment Form */}
                     <Box 
                         borderWidth="1px" 
                         borderRadius="lg" 
@@ -1683,54 +1748,51 @@ export default function HomePage() {
                     >
                         <Heading size="md" textColor="white" mb={4}>Create Fake Payment</Heading>
                         
-                        <VStack spacing={4} align="stretch">
+                        <SimpleGrid columns={1} spacing={4}>
                             <FormControl>
                                 <FormLabel textColor="white">Receiver Address</FormLabel>
-                                <Input
-                                    value={paymentReceiver}
-                                    onChange={(e) => setPaymentReceiver(e.target.value)}
-                                    placeholder="0x..."
-                                    color="white"
-                                    bg="gray.700"
+                                <Input 
+                                    placeholder="0x..." 
+                                    value={paymentReceiver} 
+                                    onChange={(e) => setPaymentReceiver(e.target.value)} 
+                                    textColor="white"
                                 />
                             </FormControl>
                             
                             <FormControl>
                                 <FormLabel textColor="white">Amount</FormLabel>
-                                <Input
-                                    value={paymentAmount}
+                                <Input 
+                                    placeholder="0.1" 
+                                    value={paymentAmount} 
                                     onChange={(e) => setPaymentAmount(sanitizeNumber(e.target.value, true))}
-                                    placeholder="0.1"
-                                    color="white"
-                                    bg="gray.700"
+                                    textColor="white" 
                                 />
                             </FormControl>
                             
                             <FormControl>
                                 <FormLabel textColor="white">Currency</FormLabel>
-                                <Select
-                                    value={paymentCurrency}
+                                <Select 
+                                    value={paymentCurrency} 
                                     onChange={(e) => setPaymentCurrency(e.target.value)}
-                                    color="white"
-                                    bg="gray.700"
+                                    textColor="white"
                                 >
                                     <option value="ETH">ETH</option>
                                     <option value="USDC">USDC</option>
                                 </Select>
                             </FormControl>
                             
-                            <Button
-                                colorScheme="teal"
+                            <Button 
+                                colorScheme="green" 
                                 onClick={handleCreateFakePayment}
                                 isLoading={creatingPayment}
-                                isDisabled={!account}
+                                width="100%"
                             >
                                 Create Payment
                             </Button>
-                        </VStack>
+                        </SimpleGrid>
                     </Box>
                     
-                    {/* Payment History */}
+                    {/* Your Payment History */}
                     <Box 
                         borderWidth="1px" 
                         borderRadius="lg" 
@@ -1738,95 +1800,159 @@ export default function HomePage() {
                         bg="gray.800"
                         width="100%"
                     >
-                        <HStack justify="space-between" mb={4}>
-                            <Heading size="md" textColor="white">Payment History</Heading>
-                            <Button
-                                size="sm"
-                                colorScheme="blue"
-                                onClick={fetchPaymentHistory}
-                                isLoading={loadingPayments}
-                                leftIcon={<span role="img" aria-label="refresh">🔄</span>}
-                            >
-                                Refresh
-                            </Button>
-                        </HStack>
+                        <Heading size="md" textColor="white" mb={4}>Your Payment History (From PaymentEscrow)</Heading>
                         
-                        {loadingPayments ? (
-                            <Spinner color="blue.500" />
+                        {!account ? (
+                            <Text textColor="red.300">Please connect your wallet to view payment history</Text>
+                        ) : loadingPayments ? (
+                            <Center p={8}>
+                                <Spinner color="white" size="xl" />
+                            </Center>
                         ) : payments.length === 0 ? (
-                            <Text textColor="white">No payment history found</Text>
+                            <Text textColor="white">No payments found</Text>
                         ) : (
-                            <VStack spacing={3} align="stretch" width="100%">
+                            <VStack spacing={4} align="stretch">
                                 {payments.map((payment, index) => (
-                                    <Box 
-                                        key={`payment-${payment.id}-${index}`} 
-                                        p={4} 
-                                        borderWidth="1px" 
-                                        borderRadius="md" 
-                                        backgroundColor="#1f2937" 
-                                        width="100%"
-                                    >
-                                        <VStack align="start" spacing={2} width="100%">
-                                            <HStack width="100%" justify="space-between">
-                                                <Text textColor="white" fontSize="sm" opacity="0.8">
-                                                    ID: {payment.id ? payment.id.substring(0, 8) + '...' : 'Unknown'}
+                                    <Box key={index} p={4} borderWidth="1px" borderRadius="md" bg="gray.700">
+                                        <SimpleGrid columns={[1, null, 2]} spacing={4}>
+                                            <Box>
+                                                <Text textColor="white" fontWeight="bold">
+                                                    Payment ID:
                                                 </Text>
-                                                <Text 
-                                                    textColor={payment.released ? "green.300" : "yellow.300"}
-                                                    fontWeight="bold"
-                                                    fontSize="sm"
-                                                >
-                                                    {payment.released ? "RELEASED" : "IN ESCROW"}
+                                                <Text textColor="white" fontSize="sm" isTruncated>
+                                                    {payment.id}
                                                 </Text>
-                                            </HStack>
-                                            
-                                            <HStack width="100%" wrap="wrap" spacing={4}>
-                                                <VStack align="start" minW="140px">
-                                                    <Text textColor="gray.400" fontSize="xs">
-                                                        From
-                                                    </Text>
-                                                    <Text textColor="white">
-                                                        {payment.payer ? `${payment.payer.substring(0, 6)}...${payment.payer.substring(payment.payer.length - 4)}` : 'Unknown'}
-                                                    </Text>
-                                                </VStack>
                                                 
-                                                <VStack align="start" minW="140px">
-                                                    <Text textColor="gray.400" fontSize="xs">
-                                                        To
-                                                    </Text>
-                                                    <Text textColor="white">
-                                                        {payment.receiver ? `${payment.receiver.substring(0, 6)}...${payment.receiver.substring(payment.receiver.length - 4)}` : 'Unknown'}
-                                                    </Text>
-                                                </VStack>
+                                                <Text textColor="white" fontWeight="bold" mt={2}>
+                                                    Receiver:
+                                                </Text>
+                                                <Text textColor="white" fontSize="sm" isTruncated>
+                                                    {payment.receiver}
+                                                </Text>
                                                 
-                                                <VStack align="start" minW="100px">
-                                                    <Text textColor="gray.400" fontSize="xs">
-                                                        Amount
-                                                    </Text>
-                                                    <Text textColor="white" fontWeight="bold">
-                                                        {payment.amount} {payment.currency}
-                                                    </Text>
-                                                </VStack>
-                                            </HStack>
+                                                <Text textColor="white" fontWeight="bold" mt={2}>
+                                                    Amount:
+                                                </Text>
+                                                <Text textColor="white">
+                                                    {payment.amount} {payment.currency === ethers.ZeroAddress ? 'ETH' : 'USDC'}
+                                                </Text>
+                                            </Box>
                                             
-                                            {!payment.released && (
-                                                <Button
-                                                    mt={2}
-                                                    size="sm"
-                                                    colorScheme="blue"
-                                                    onClick={() => handleReleasePayment(payment.id)}
-                                                    isLoading={releasingPayment === payment.id}
-                                                    isDisabled={!account}
-                                                    width="100%"
+                                            <Box>
+                                                <Text textColor="white" fontWeight="bold">
+                                                    Status:
+                                                </Text>
+                                                <Badge 
+                                                    colorScheme={payment.released ? "green" : "yellow"}
+                                                    p={1}
                                                 >
-                                                    Release Payment
-                                                </Button>
-                                            )}
-                                        </VStack>
+                                                    {payment.released ? "Released" : "In Escrow"}
+                                                </Badge>
+                                                
+                                                {!payment.released && (
+                                                    <Button 
+                                                        mt={4} 
+                                                        colorScheme="blue"
+                                                        size="sm"
+                                                        onClick={() => handleReleasePayment(payment.id)}
+                                                        isLoading={releasingPayment === payment.id}
+                                                        width="full"
+                                                    >
+                                                        Release from Escrow
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                        </SimpleGrid>
                                     </Box>
                                 ))}
                             </VStack>
                         )}
+                        
+                        <Button 
+                            mt={4} 
+                            onClick={fetchPaymentHistory} 
+                            isLoading={loadingPayments}
+                            colorScheme="blue"
+                        >
+                            Refresh Payments
+                        </Button>
+                    </Box>
+                    
+                    {/* Global Purchase History */}
+                    <Box 
+                        borderWidth="1px" 
+                        borderRadius="lg" 
+                        p={6}
+                        bg="gray.800"
+                        width="100%"
+                    >
+                        <Heading size="md" textColor="white" mb={4}>Global Purchase History (From PurchaseTracker)</Heading>
+                        
+                        {!account ? (
+                            <Text textColor="red.300">Please connect your wallet to view purchase history</Text>
+                        ) : loadingAllPurchases ? (
+                            <Center p={8}>
+                                <Spinner color="white" size="xl" />
+                            </Center>
+                        ) : allPurchases.length === 0 ? (
+                            <Text textColor="white">No purchases found</Text>
+                        ) : (
+                            <VStack spacing={4} align="stretch">
+                                {allPurchases.map((purchase, index) => (
+                                    <Box key={index} p={4} borderWidth="1px" borderRadius="md" bg="gray.700">
+                                        <SimpleGrid columns={[1, null, 2]} spacing={4}>
+                                            <Box>
+                                                <Text textColor="white" fontWeight="bold">
+                                                    Transaction:
+                                                </Text>
+                                                <Badge colorScheme="green" mb={2}>
+                                                    Purchase Completed
+                                                </Badge>
+                                                
+                                                <Text textColor="white" fontWeight="bold" mt={2}>
+                                                    Buyer:
+                                                </Text>
+                                                <Text textColor="white" fontSize="sm" isTruncated>
+                                                    {purchase.buyer === account ? "You" : purchase.buyer}
+                                                </Text>
+                                                
+                                                <Text textColor="white" fontWeight="bold" mt={2}>
+                                                    Seller:
+                                                </Text>
+                                                <Text textColor="white" fontSize="sm" isTruncated>
+                                                    {purchase.seller === account ? "You" : purchase.seller}
+                                                </Text>
+                                            </Box>
+                                            
+                                            <Box>
+                                                <Text textColor="white" fontWeight="bold">
+                                                    Amount:
+                                                </Text>
+                                                <Text textColor="white" fontSize="lg" fontWeight="bold">
+                                                    {purchase.amount} ETH
+                                                </Text>
+                                                
+                                                <Text textColor="white" fontWeight="bold" mt={2}>
+                                                    Date:
+                                                </Text>
+                                                <Text textColor="white">
+                                                    {new Date(purchase.timestamp * 1000).toLocaleString()}
+                                                </Text>
+                                            </Box>
+                                        </SimpleGrid>
+                                    </Box>
+                                ))}
+                            </VStack>
+                        )}
+                        
+                        <Button 
+                            mt={4} 
+                            onClick={fetchAllPurchases} 
+                            isLoading={loadingAllPurchases}
+                            colorScheme="blue"
+                        >
+                            Refresh Purchase History
+                        </Button>
                     </Box>
                 </VStack>
             )}
