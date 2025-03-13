@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Text,
@@ -9,7 +9,8 @@ import {
     Button,
     HStack,
     Select,
-    useToast
+    useToast,
+    Spinner
 } from '@chakra-ui/react';
 import { useWeb3 } from '../Web3Context';
 
@@ -22,6 +23,7 @@ const UserInfoSection = () => {
         depositToBaalVault,
         getUserSharesBalance,
         getUserLootBalance,
+        getUserGovernanceTokenBalance,
         ragequitFromBaal
     } = useWeb3();
     
@@ -31,6 +33,7 @@ const UserInfoSection = () => {
     const [userLootBalance, setUserLootBalance] = useState('0');
     const [userSharesBalance, setUserSharesBalance] = useState('0');
     const [userGovernanceTokenBalance, setUserGovernanceTokenBalance] = useState('0');
+    const [loadingBalances, setLoadingBalances] = useState(false);
 
     // Add state for token deposit
     const [depositTokenAddress, setDepositTokenAddress] = useState('0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'); // Default to ETH
@@ -44,6 +47,39 @@ const UserInfoSection = () => {
     const [ragequitRecipient, setRagequitRecipient] = useState('');
     const [selectedTokens, setSelectedTokens] = useState(['eth']);
     const [ragequitLoading, setRagequitLoading] = useState(false);
+
+    // Fetch user balances when component mounts or account changes
+    useEffect(() => {
+        const fetchBalances = async () => {
+            if (!account) return;
+            
+            setLoadingBalances(true);
+            try {
+                const [lootBal, sharesBal, govBal] = await Promise.all([
+                    getUserLootBalance(account),
+                    getUserSharesBalance(account),
+                    getUserGovernanceTokenBalance(account)
+                ]);
+                
+                setUserLootBalance(lootBal);
+                setUserSharesBalance(sharesBal);
+                setUserGovernanceTokenBalance(govBal);
+            } catch (err) {
+                console.error('Error fetching balances:', err);
+                toast({
+                    title: 'Error',
+                    description: 'Failed to fetch balances',
+                    status: 'error',
+                    duration: 5000,
+                    isClosable: true,
+                });
+            } finally {
+                setLoadingBalances(false);
+            }
+        };
+
+        fetchBalances();
+    }, [account, getUserLootBalance, getUserSharesBalance, getUserGovernanceTokenBalance]);
 
     // Ensures that input is numeric by stripping out non-numerics
     const sanitizeNumber = (input, allowDecimal) => {
@@ -88,6 +124,17 @@ const UserInfoSection = () => {
                 duration: 5000,
                 isClosable: true,
             });
+
+            // Refresh balances after deposit
+            const [lootBal, sharesBal, govBal] = await Promise.all([
+                getUserLootBalance(account),
+                getUserSharesBalance(account),
+                getUserGovernanceTokenBalance(account)
+            ]);
+            
+            setUserLootBalance(lootBal);
+            setUserSharesBalance(sharesBal);
+            setUserGovernanceTokenBalance(govBal);
         } catch (err) {
             console.error('Error depositing to vault:', err);
             setError(`Error depositing to vault: ${err.message}`);
@@ -188,15 +235,31 @@ const UserInfoSection = () => {
             <Text fontSize="lg" textColor="white">
                 Connected Wallet: {account || 'Not connected'}
             </Text>
-            <Text fontSize="lg" textColor="white">
-                Your Loot Balance: {userLootBalance}
-            </Text>
-            <Text fontSize="lg" textColor="white">
-                Your Governance Token Balance: {userGovernanceTokenBalance}
-            </Text>
-            <Text fontSize="lg" textColor="white">
-                Your Shares Balance: {userSharesBalance}
-            </Text>
+            
+            {/* Balances Display */}
+            <Box width="100%" bg="gray.800" p={4} borderRadius="md">
+                <Text size="md" mb={4} color="white" fontWeight="bold">
+                    Your Balances
+                </Text>
+                {loadingBalances ? (
+                    <HStack spacing={4} justify="center">
+                        <Spinner color="white" />
+                        <Text color="white">Loading balances...</Text>
+                    </HStack>
+                ) : (
+                    <VStack spacing={2} align="start">
+                        <Text fontSize="lg" textColor="white">
+                            Loot Balance: {userLootBalance}
+                        </Text>
+                        <Text fontSize="lg" textColor="white">
+                            Shares Balance: {userSharesBalance}
+                        </Text>
+                        <Text fontSize="lg" textColor="white">
+                            Governance Token Balance: {userGovernanceTokenBalance}
+                        </Text>
+                    </VStack>
+                )}
+            </Box>
 
             {/* Add Token Deposit Section */}
             <Box

@@ -37,7 +37,8 @@ const getContractAddressesFromFile = async () => {
             PURCHASE_TRACKER_ADDRESS: null,
             PAYMENT_ESCROW_ADDRESS: null,
             HATS_ADDRESS: null,
-            COMMUNITY_VAULT_ADDRESS: null
+            COMMUNITY_VAULT_ADDRESS: null,
+            TEST_TOKEN_ADDRESS: null
         };
         
         // Extract addresses using regex
@@ -77,6 +78,10 @@ const getContractAddressesFromFile = async () => {
         const communityVaultMatch = data.match(/CommunityVault deployed at: (0x[a-fA-F0-9]{40})/);
         if (communityVaultMatch) addresses.COMMUNITY_VAULT_ADDRESS = communityVaultMatch[1];
         
+        // Add TestToken address extraction
+        const testTokenMatch = data.match(/TestToken deployed at: (0x[a-fA-F0-9]{40})/);
+        if (testTokenMatch) addresses.TEST_TOKEN_ADDRESS = testTokenMatch[1];
+        
         console.log('Extracted addresses from deploy.txt:', addresses);
         return addresses;
     } catch (error) {
@@ -97,6 +102,7 @@ export const Web3Provider = ({ children }) => {
     const [communityVault, setCommunityVault] = useState(null);
     const [paymentEscrow, setPaymentEscrow] = useState(null);
     const [purchaseTracker, setPurchaseTracker] = useState(null);
+    const [testToken, setTestToken] = useState(null);
 
     useEffect(() => {
         // Load contract addresses from file
@@ -188,6 +194,17 @@ export const Web3Provider = ({ children }) => {
                     web3Signer
                 );
                 setPurchaseTracker(purchaseTrackerContract);
+                
+                // Load TestToken contract if address exists
+                if (contractAddresses.TEST_TOKEN_ADDRESS) {
+                    const testTokenContract = new ethers.Contract(
+                        contractAddresses.TEST_TOKEN_ADDRESS,
+                        ERC20_ABI,
+                        web3Signer
+                    );
+                    setTestToken(testTokenContract);
+                    console.log('TestToken contract loaded:', contractAddresses.TEST_TOKEN_ADDRESS);
+                }
             } else {
                 console.error('No Ethereum wallet detected or contract addresses not loaded');
             }
@@ -197,6 +214,113 @@ export const Web3Provider = ({ children }) => {
             initWeb3();
         }
     }, [contractAddresses]);
+
+    // Function to mint test tokens to the connected account
+    const mintTestTokens = async (amount) => {
+        if (!testToken || !signer || !account) {
+            throw new Error('TestToken contract or account not available');
+        }
+
+        try {
+            // Convert amount to wei (assuming 18 decimals for the test token)
+            const amountInWei = parseUnits(amount.toString(), 18);
+            
+            // Create a custom mint function call using the interface
+            const mintData = testToken.interface.encodeFunctionData("mint", [account, amountInWei]);
+            
+            // Call the mint function directly 
+            const tx = await signer.sendTransaction({
+                to: contractAddresses.TEST_TOKEN_ADDRESS,
+                data: mintData
+            });
+            
+            await tx.wait();
+            console.log(`Minted ${amount} TestTokens to ${account}`);
+            return tx.hash;
+        } catch (error) {
+            console.error('Error minting test tokens:', error);
+            throw error;
+        }
+    };
+
+    // Function to get test token balance
+    const getTestTokenBalance = async (address) => {
+        if (!testToken) return '0';
+        
+        try {
+            const targetAddress = address || account;
+            if (!targetAddress) return '0';
+            
+            const balance = await testToken.balanceOf(targetAddress);
+            const decimals = await testToken.decimals();
+            return ethers.formatUnits(balance, decimals);
+        } catch (error) {
+            console.error('Error getting test token balance:', error);
+            return '0';
+        }
+    };
+
+    // Function to get test token name and symbol
+    const getTestTokenInfo = async () => {
+        if (!testToken) return { name: 'Test Token', symbol: 'TEST' };
+        
+        try {
+            const name = await testToken.name();
+            const symbol = await testToken.symbol();
+            return { name, symbol };
+        } catch (error) {
+            console.error('Error getting test token info:', error);
+            return { name: 'Test Token', symbol: 'TEST' };
+        }
+    };
+
+    // Function to create payment with test token
+    const createTestTokenPayment = async (receiver, amount) => {
+        if (!paymentEscrow || !testToken || !account) {
+            throw new Error('Required contracts or account not available');
+        }
+
+        try {
+            // Generate a payment ID
+            const timestamp = Date.now().toString();
+            const randomData = Math.random().toString();
+            const paymentIdInput = ethers.concat([
+                ethers.toUtf8Bytes(timestamp),
+                ethers.toUtf8Bytes(randomData),
+                ethers.getBytes(account)
+            ]);
+            
+            const paymentId = ethers.keccak256(paymentIdInput);
+            
+            // Convert amount to token units (assuming 18 decimals)
+            const amountInTokenUnits = parseUnits(amount, 18);
+            
+            // First approve the payment escrow to spend tokens
+            const approveTx = await testToken.approve(
+                contractAddresses.PAYMENT_ESCROW_ADDRESS, 
+                amountInTokenUnits
+            );
+            await approveTx.wait();
+            
+            // Create payment input with the test token address
+            const paymentInput = {
+                id: paymentId,
+                payer: account,
+                receiver: receiver,
+                amount: amountInTokenUnits,
+                currency: contractAddresses.TEST_TOKEN_ADDRESS // Use test token address
+            };
+            
+            // Place the payment
+            const tx = await paymentEscrow.placePayment(paymentInput);
+            await tx.wait();
+            
+            return paymentId;
+        } catch (error) {
+            console.error('Error creating test token payment:', error);
+            throw error;
+        }
+    };
 
     const submitLootProposal = async (expiration = 0, baalGas = 1500000) => {
         if (!baalContract || !account) return;
@@ -929,10 +1053,13 @@ export const Web3Provider = ({ children }) => {
         try {
             const totalCount = await purchaseTracker.totalPurchaseCount(userAddress);
             const totalAmount = await purchaseTracker.totalPurchaseAmount(userAddress);
+
+            
             
             return {
                 totalCount: totalCount.toString(),
                 totalAmount: ethers.formatEther(totalAmount)
+                
             };
         } catch (error) {
             console.error('Error getting user purchase info:', error);
@@ -1016,7 +1143,13 @@ export const Web3Provider = ({ children }) => {
                 getPaymentDetails,
                 getUserPurchaseInfo,
                 getUserSalesInfo,
-                getCommunityVaultLootBalance
+                getCommunityVaultLootBalance,
+                // New TestToken related functions
+                testToken,
+                mintTestTokens,
+                getTestTokenBalance,
+                getTestTokenInfo,
+                createTestTokenPayment
             }}
         >
             {children}

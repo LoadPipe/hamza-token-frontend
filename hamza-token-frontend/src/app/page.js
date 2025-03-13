@@ -37,7 +37,7 @@ export default function HomePage() {
             
             {/* Navigation tabs for switching between sections */}
             <NavigationTabs activeTab={viewMode} setActiveTab={setViewMode} />
-            
+
             {/* Render the appropriate section based on viewMode */}
             <Center w="100%">
                 {viewMode === 'user' && <UserInfoSection />}
@@ -46,7 +46,7 @@ export default function HomePage() {
                 {viewMode === 'fee' && <FeeProposalSection />}
                 {viewMode === 'community-vault' && <CommunityVaultSection />}
                 {viewMode === 'payments' && <PaymentSection />}
-            </Center>
+                                </Center>
         </Box>
     );
 }

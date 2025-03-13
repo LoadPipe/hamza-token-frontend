@@ -10,6 +10,7 @@ import {
   Center,
   Badge,
   useToast,
+  HStack,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../../Web3Context';
@@ -20,7 +21,7 @@ import { useWeb3 } from '../../Web3Context';
  * @param {Function} props.onPaymentReleased - Callback after successful payment release
  */
 const PaymentHistoryList = ({ onPaymentReleased }) => {
-  const { account, paymentEscrow, releasePayment } = useWeb3();
+  const { account, paymentEscrow, releasePayment, contractAddresses } = useWeb3();
   const toast = useToast();
   
   const [payments, setPayments] = useState([]);
@@ -75,49 +76,64 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
         
         // Process logs to get unique payment IDs
         const uniquePaymentIds = new Set();
-        for (const log of logs) {
+        
+        logs.forEach(log => {
           try {
-            const parsedLog = paymentEscrow.interface.parseLog({
-              topics: log.topics,
-              data: log.data
-            });
-            
-            if (parsedLog && parsedLog.args && parsedLog.args.length > 0) {
-              const paymentId = parsedLog.args[0];
-              
-              // Verify that it's a properly formatted
-              if (typeof paymentId === 'string' && 
-                paymentId.startsWith('0x') && 
-                paymentId.length === 66) { 
-                uniquePaymentIds.add(paymentId);
-              } else {
-                console.warn('Invalid payment ID format:', paymentId);
-              }
+            // Parse the log to get the payment ID
+            const parsedLog = paymentEscrow.interface.parseLog(log);
+            const paymentId = parsedLog.args[0];
+            // Only add valid payment IDs (32 bytes)
+            if (ethers.isHexString(paymentId, 32)) {
+              uniquePaymentIds.add(paymentId);
             }
           } catch (error) {
             console.error('Error parsing log:', error);
           }
-        }
-        
-        console.log(`Found ${uniquePaymentIds.size} unique payment IDs`);
+        });
         
         // Convert to array and fetch details for each payment ID
         const paymentPromises = Array.from(uniquePaymentIds).map(async (id) => {
           try {
+            // Validate payment ID format before making the call
+            if (!ethers.isHexString(id, 32)) {
+              console.log('Invalid payment ID format:', id);
+              return null;
+            }
+
             console.log(`Fetching payment details for ID: ${id}`);
             const details = await paymentEscrow.getPayment(id);
             
             // Skip invalid payments
-            if (!details || details.id === ethers.ZeroHash) {
-              console.log('Skipping invalid payment');
+            if (!details || !ethers.isHexString(details.id, 32)) {
+              console.log('Invalid payment details:', details);
+              return null;
+            }
+
+            console.log(details);
+            // Determine currency type and formatting
+            let currencyLabel = 'ETH';
+            let formattedAmount;
+            let tokenDecimals = 18; // Default for ETH and most ERC20s
+            
+            if (details.currency === ethers.ZeroAddress) {
+              // ETH payment
+              
+              formattedAmount = ethers.formatEther(details.amount);
+              currencyLabel = 'ETH';
+            } else if (details.currency === contractAddresses?.TEST_TOKEN_ADDRESS) {
+              // TestToken payment - assuming 18 decimals from the contract
+              console.log("details.currency", details.currency);
+              formattedAmount = ethers.formatUnits(details.amount, tokenDecimals);
+              currencyLabel = 'TEST';
+            } else {
+              // Skip unknown currency types
+              console.log('Unknown currency type:', details.currency);
               return null;
             }
             
-            const formattedAmount = details.currency === ethers.ZeroAddress 
-              ? ethers.formatEther(details.amount)
-              : ethers.formatUnits(details.amount, 6); // USDC has 6 decimals
-              
-            const currencyLabel = details.currency === ethers.ZeroAddress ? 'ETH' : 'USDC';
+            // Determine if this is a payment the user is involved with
+            const isUserPayer = details.payer.toLowerCase() === account.toLowerCase();
+            const isUserReceiver = details.receiver.toLowerCase() === account.toLowerCase();
             
             return {
               id: id,
@@ -125,7 +141,10 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
               receiver: details.receiver,
               amount: formattedAmount,
               currency: currencyLabel,
-              released: details.released
+              released: details.released,
+              currencyAddress: details.currency,
+              isUserPayer,
+              isUserReceiver
             };
           } catch (error) {
             console.error(`Error fetching payment ${id}:`, error);
@@ -148,22 +167,22 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
           setPayments(fetchedPayments);
         }
       } catch (error) {
-        console.error("Error fetching blockchain data:", error);
+        console.error('Error fetching payment history:', error);
         toast({
           title: "Error",
-          description: "Failed to fetch payment data from blockchain",
+          description: `Failed to fetch payment history: ${error.message}`,
           status: "error",
-          duration: 3000,
+          duration: 5000,
           isClosable: true
         });
       }
     } catch (error) {
-      console.error("Error in fetchPaymentHistory:", error);
+      console.error('Error in payment history:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch payment history: " + error.message,
+        description: `Something went wrong: ${error.message}`,
         status: "error",
-        duration: 3000,
+        duration: 5000,
         isClosable: true
       });
     } finally {
@@ -173,31 +192,34 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
   
   // Handler for releasing a payment from escrow
   const handleReleasePayment = async (paymentId) => {
-    if (!account) {
+    if (!account || !paymentEscrow) {
       toast({
-        title: 'Error',
-        description: 'Please connect your wallet',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        status: "warning",
+        duration: 3000,
+        isClosable: true
       });
       return;
     }
-
+    
     try {
-      setReleasingPayment(paymentId); // Track which payment is being released
-      await releasePayment(paymentId);
+      setReleasingPayment(paymentId);
+      
+      const txHash = await releasePayment(paymentId);
       
       toast({
-        title: 'Payment Released',
-        description: 'Payment has been released from escrow',
-        status: 'success',
+        title: "Payment Released",
+        description: "Payment was successfully released from escrow",
+        status: "success",
         duration: 5000,
-        isClosable: true,
+        isClosable: true
       });
       
-      // Refresh payment history and call the callback
+      // Refresh the payment list
       fetchPaymentHistory();
+      
+      // Call the callback if provided
       if (onPaymentReleased && typeof onPaymentReleased === 'function') {
         onPaymentReleased();
       }
@@ -205,17 +227,23 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
     } catch (error) {
       console.error('Error releasing payment:', error);
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to release payment: ${error.message}`,
-        status: 'error',
+        status: "error",
         duration: 5000,
-        isClosable: true,
+        isClosable: true
       });
     } finally {
       setReleasingPayment(null);
     }
   };
   
+  // Helper to shorten an address for display
+  const shortenAddress = (address) => {
+    if (!address) return '';
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  };
+
   return (
     <Box 
       borderWidth="1px" 
@@ -224,7 +252,17 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
       bg="gray.800"
       width="100%"
     >
-      <Heading size="md" textColor="white" mb={4}>Your Payment History (From PaymentEscrow)</Heading>
+      <HStack mb={4} justifyContent="space-between">
+        <Heading size="md" textColor="white">Your Payment History</Heading>
+        <Button 
+          size="sm" 
+          colorScheme="blue" 
+          onClick={fetchPaymentHistory} 
+          isLoading={loadingPayments}
+        >
+          Refresh
+        </Button>
+      </HStack>
       
       {!account ? (
         <Text textColor="red.300">Please connect your wallet to view payment history</Text>
@@ -237,29 +275,50 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
       ) : (
         <VStack spacing={4} align="stretch">
           {payments.map((payment, index) => (
-            <Box key={index} p={4} borderWidth="1px" borderRadius="md" bg="gray.700">
+            <Box 
+              key={index} 
+              p={4} 
+              borderWidth="1px" 
+              borderRadius="md" 
+              bg="gray.700"
+              borderColor={
+                payment.isUserReceiver && !payment.released 
+                  ? "yellow.400" 
+                  : "gray.600"
+              }
+            >
               <SimpleGrid columns={[1, null, 2]} spacing={4}>
                 <Box>
-                  <Text textColor="white" fontWeight="bold">
-                    Payment ID:
-                  </Text>
-                  <Text textColor="white" fontSize="sm" isTruncated>
-                    {payment.id}
-                  </Text>
+                  <HStack justifyContent="space-between">
+                    <Text textColor="white" fontWeight="bold">Type:</Text>
+                    <Badge 
+                      colorScheme={payment.isUserPayer ? "red" : "green"}
+                    >
+                      {payment.isUserPayer ? "Sent" : "Received"}
+                    </Badge>
+                  </HStack>
                   
                   <Text textColor="white" fontWeight="bold" mt={2}>
-                    Receiver:
+                    {payment.isUserPayer ? "To:" : "From:"}
                   </Text>
                   <Text textColor="white" fontSize="sm" isTruncated>
-                    {payment.receiver}
+                    {payment.isUserPayer 
+                      ? shortenAddress(payment.receiver)
+                      : shortenAddress(payment.payer)
+                    }
                   </Text>
                   
                   <Text textColor="white" fontWeight="bold" mt={2}>
                     Amount:
                   </Text>
-                  <Text textColor="white">
-                    {payment.amount} {payment.currency}
-                  </Text>
+                  <HStack>
+                    <Text textColor="white">
+                      {payment.amount} {payment.currency}
+                    </Text>
+                    {payment.currencyAddress === contractAddresses?.TEST_TOKEN_ADDRESS && (
+                      <Badge colorScheme="purple">Test Token</Badge>
+                    )}
+                  </HStack>
                 </Box>
                 
                 <Box>
@@ -268,21 +327,29 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
                   </Text>
                   <Badge 
                     colorScheme={payment.released ? "green" : "yellow"}
-                    p={1}
+                    mt={1}
                   >
                     {payment.released ? "Released" : "In Escrow"}
                   </Badge>
                   
-                  {!payment.released && (
-                    <Button 
-                      mt={4} 
-                      colorScheme="blue"
+                  <Text textColor="white" fontWeight="bold" mt={2}>
+                    Payment ID:
+                  </Text>
+                  <Text textColor="gray.400" fontSize="xs" isTruncated>
+                    {payment.id}
+                  </Text>
+                  
+                  {!payment.released && payment.isUserReceiver && (
+                    <Button
+                      colorScheme="green"
                       size="sm"
+                      mt={4}
+                      width="full"
                       onClick={() => handleReleasePayment(payment.id)}
                       isLoading={releasingPayment === payment.id}
-                      width="full"
+                      loadingText="Releasing"
                     >
-                      Release from Escrow
+                      Release Payment
                     </Button>
                   )}
                 </Box>
@@ -291,15 +358,6 @@ const PaymentHistoryList = ({ onPaymentReleased }) => {
           ))}
         </VStack>
       )}
-      
-      <Button 
-        mt={4} 
-        onClick={fetchPaymentHistory} 
-        isLoading={loadingPayments}
-        colorScheme="blue"
-      >
-        Refresh Payments
-      </Button>
     </Box>
   );
 };
