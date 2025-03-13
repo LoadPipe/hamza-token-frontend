@@ -958,6 +958,26 @@ export const Web3Provider = ({ children }) => {
         }
     };
 
+    // Function to get the community vault's loot token balance
+    //TODO: update smart contract logic so get balances work properly
+    const getCommunityVaultLootBalance = async () => {
+        if (!communityVault || !contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS) {
+            return null;
+        }
+        
+        try {
+            // just use the getUserLootBalance function to get the balance
+            const balance = await getUserLootBalance(contractAddresses.COMMUNITY_VAULT_ADDRESS);
+            return {
+                raw: balance,
+                formatted: balance
+            };
+        } catch (error) {
+            console.error('Error fetching community vault loot balance:', error);
+            return null;
+        }
+    };
+
     return (
         <Web3Context.Provider
             value={{
@@ -995,7 +1015,8 @@ export const Web3Provider = ({ children }) => {
                 releasePayment,
                 getPaymentDetails,
                 getUserPurchaseInfo,
-                getUserSalesInfo
+                getUserSalesInfo,
+                getCommunityVaultLootBalance
             }}
         >
             {children}

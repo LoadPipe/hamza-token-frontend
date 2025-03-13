@@ -24,10 +24,10 @@ import { ethers } from 'ethers';
 export default function HomePage() {
     const {
         account,
+        submitLootProposal,
         getTotalShares,
         getTotalLoot,
         sponsorProposalViaSafe,
-        submitLootProposal,
         submitBaalVote,
         cancelProposalViaSafe,
         wrapGovernanceToken,
@@ -46,7 +46,6 @@ export default function HomePage() {
         depositToBaalVault,
         getBaalVaultBalance,
         ragequitFromBaal,
-        getCommunityVaultBalance,
         contractAddresses,
         provider,
         paymentEscrow,
@@ -56,6 +55,8 @@ export default function HomePage() {
         getUserPurchaseInfo,
         getUserSalesInfo,
         purchaseTracker,
+        communityVault,
+        getCommunityVaultLootBalance
     } = useWeb3();
 
     const toast = useToast();
@@ -143,30 +144,28 @@ export default function HomePage() {
     // Fetch Community Vault Loot balance
     // -----------------------------
     useEffect(() => {
-        fetchCommunityVaultLootBalance();
-    }, [contractAddresses]);
+        if (contractAddresses && communityVault) {
+            fetchCommunityVaultLootBalance();
+        }
+    }, [contractAddresses, communityVault]);
 
     // Function to fetch the Community Vault's loot token balance
     const fetchCommunityVaultLootBalance = async () => {
         try {
             setLoadingCommunityVault(true);
             
-            if (!contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS || !contractAddresses.COMMUNITY_VAULT_ADDRESS) {
-                setLootTokenBalance('Not available');
-                return;
-            }
+            const result = await getCommunityVaultLootBalance();
             
-            if (!provider) {
-                setLootTokenBalance('Provider not available');
-                return;
-            }
-
-            const balance = await getCommunityVaultBalance(contractAddresses.LOOT_TOKEN_ADDRESS);
-            
-            if (balance) {
-                setLootTokenBalance(ethers.formatUnits(balance, 18));
+            if (!result) {
+                if (!contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS) {
+                    setLootTokenBalance('Not available');
+                } else if (!communityVault) {
+                    setLootTokenBalance('Vault contract not available');
+                } else {
+                    setLootTokenBalance('Error loading');
+                }
             } else {
-                setLootTokenBalance('Error loading');
+                setLootTokenBalance(result.formatted);
             }
         } catch (error) {
             console.error('Error fetching community vault loot balance:', error);
@@ -1624,7 +1623,9 @@ export default function HomePage() {
                             
                             <Heading size="md" textColor="white" mt={6}>Loot Token Balance</Heading>
                             {loadingCommunityVault ? (
-                                <Text textColor="white">Loading loot balance...</Text>
+                                <Center p={4}>
+                                    <Spinner color="white" size="md" />
+                                </Center>
                             ) : (
                                 <VStack align="start" spacing={2} width="100%">
                                     <HStack>
@@ -1640,9 +1641,9 @@ export default function HomePage() {
                                         </Text>
                                     )}
                                     
-                                    {lootTokenBalance === 'Provider not available' && (
+                                    {lootTokenBalance === 'Vault contract not available' && (
                                         <Text textColor="red.300" fontSize="sm">
-                                            Web3 provider is not available. Please connect your wallet.
+                                            Vault contract is not available. Please check your wallet connection.
                                         </Text>
                                     )}
                                     
@@ -1662,25 +1663,6 @@ export default function HomePage() {
                             >
                                 Refresh Balance
                             </Button>
-                        </VStack>
-                    </Box>
-                    
-                    {/* Debug information */}
-                    <Box 
-                        borderWidth="1px" 
-                        borderRadius="lg" 
-                        p={6}
-                        bg="gray.800"
-                        width="100%"
-                    >
-                        <Heading size="md" textColor="white" mb={4}>Debug Information</Heading>
-                        <VStack align="start" spacing={2}>
-                            <Text textColor="white">
-                                <strong>Loot Token Address:</strong> {contractAddresses?.LOOT_TOKEN_ADDRESS || 'Not available'}
-                            </Text>
-                            <Text textColor="white">
-                                <strong>Provider Connected:</strong> {provider ? 'Yes' : 'No'}
-                            </Text>
                         </VStack>
                     </Box>
                 </VStack>
