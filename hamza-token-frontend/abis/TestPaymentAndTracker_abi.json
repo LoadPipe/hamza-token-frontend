@@ -79,6 +79,19 @@
   },
   {
     "type": "function",
+    "name": "deployedTestToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "escrow",
     "inputs": [],
     "outputs": [
@@ -420,6 +433,13 @@
   },
   {
     "type": "function",
+    "name": "testCurrencyBasedTracking",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "testFullReleaseRecordsPurchase",
     "inputs": [],
     "outputs": [],
@@ -435,6 +455,20 @@
   {
     "type": "function",
     "name": "testFullReleaseRecordsPurchaseMultiplePayments",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testMultipleCurrencyTracking",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testNativeCurrencyTracking",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"

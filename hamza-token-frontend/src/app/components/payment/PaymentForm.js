@@ -19,7 +19,7 @@ import { useWeb3 } from '../../Web3Context';
  * @param {Function} props.onPaymentCreated - Callback after successful payment creation
  */
 const PaymentForm = ({ onPaymentCreated }) => {
-  const { account, createFakePayment } = useWeb3();
+  const { account, createFakePayment, createTestTokenPayment, contractAddresses } = useWeb3();
   const toast = useToast();
   
   // Form state
@@ -75,25 +75,18 @@ const PaymentForm = ({ onPaymentCreated }) => {
     try {
       setCreatingPayment(true);
       
-      // Generate a unique payment ID 
-      const timestamp = Date.now().toString();
-      const randomData = Math.random().toString();
-      const paymentIdInput = ethers.concat([
-        ethers.toUtf8Bytes(timestamp),
-        ethers.toUtf8Bytes(randomData),
-        ethers.getBytes(account)
-      ]);
+      let paymentResult;
       
-      // Generate payment ID with keccak256 hash
-      const paymentId = ethers.keccak256(paymentIdInput);
-      
-      console.log('Generated payment ID:', paymentId);
-      
-      const paymentResult = await createFakePayment(paymentReceiver, paymentAmount, paymentCurrency);
+      // Handle different payment types
+      if (paymentCurrency === 'TEST_TOKEN') {
+        paymentResult = await createTestTokenPayment(paymentReceiver, paymentAmount);
+      } else {
+        paymentResult = await createFakePayment(paymentReceiver, paymentAmount, paymentCurrency);
+      }
       
       toast({
         title: 'Payment Created',
-        description: `Payment created successfully`,
+        description: `Payment created successfully with ${paymentCurrency}`,
         status: 'success',
         duration: 5000,
         isClosable: true,
@@ -122,6 +115,9 @@ const PaymentForm = ({ onPaymentCreated }) => {
     }
   };
 
+  // Check if TestToken is available
+  const isTestTokenAvailable = contractAddresses && contractAddresses.TEST_TOKEN_ADDRESS;
+
   return (
     <Box 
       borderWidth="1px" 
@@ -130,7 +126,7 @@ const PaymentForm = ({ onPaymentCreated }) => {
       bg="gray.800"
       width="100%"
     >
-      <Heading size="md" textColor="white" mb={4}>Create Fake Payment</Heading>
+      <Heading size="md" textColor="white" mb={4}>Create Payment</Heading>
       
       <SimpleGrid columns={1} spacing={4}>
         <FormControl>
@@ -161,7 +157,9 @@ const PaymentForm = ({ onPaymentCreated }) => {
             textColor="white"
           >
             <option value="ETH">ETH</option>
-            <option value="USDC">USDC</option>
+            {isTestTokenAvailable && (
+              <option value="TEST_TOKEN">Test Token</option>
+            )}
           </Select>
         </FormControl>
         

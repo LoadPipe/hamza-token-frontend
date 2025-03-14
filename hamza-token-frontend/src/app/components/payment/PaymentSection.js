@@ -7,12 +7,13 @@ import UserStatsPanel from './UserStatsPanel';
 import PaymentForm from './PaymentForm';
 import PaymentHistoryList from './PaymentHistoryList';
 import PurchaseHistoryList from './PurchaseHistoryList';
+import TestTokenSection from './TestTokenSection';
 
 /**
  * Payment Simulator section that combines all payment-related functionality
  */
 const PaymentSection = () => {
-  const { account } = useWeb3();
+  const { account, contractAddresses } = useWeb3();
   
   // Refresh handlers for child components
   const refreshAll = () => {
@@ -29,6 +30,9 @@ const PaymentSection = () => {
     }
   }, [account]);
 
+  // Check if TestToken is available
+  const isTestTokenAvailable = contractAddresses && contractAddresses.TEST_TOKEN_ADDRESS;
+
   return (
     <VStack spacing={6} width="100%" maxW="900px">
       <Heading textColor="white" size="xl">Payment Simulator</Heading>
@@ -44,6 +48,11 @@ const PaymentSection = () => {
       
       {/* Global purchase history */}
       <PurchaseHistoryList />
+
+      {/* TestToken section (if available) */}
+      {isTestTokenAvailable && (
+        <TestTokenSection />
+      )}
     </VStack>
   );
 };
