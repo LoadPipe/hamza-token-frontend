@@ -1117,22 +1117,145 @@ export const Web3Provider = ({ children }) => {
     };
 
     // Function to get the community vault's loot token balance
-    //TODO: update smart contract logic so get balances work properly
     const getCommunityVaultLootBalance = async () => {
         if (!communityVault || !contractAddresses || !contractAddresses.LOOT_TOKEN_ADDRESS) {
             return null;
         }
         
         try {
-            // just use the getUserLootBalance function to get the balance
-            const balance = await getUserLootBalance(contractAddresses.COMMUNITY_VAULT_ADDRESS);
+            const balance = await communityVault.getBalance(contractAddresses.LOOT_TOKEN_ADDRESS);
             return {
                 raw: balance,
-                formatted: balance
+                formatted: ethers.formatUnits(balance, 18)
             };
         } catch (error) {
-            console.error('Error fetching community vault loot balance:', error);
+            console.error('Error getting community vault loot balance:', error);
             return null;
+        }
+    };
+
+    // Function to get the community vault's test token balance
+    const getCommunityVaultTestTokenBalance = async () => {
+        if (!communityVault || !contractAddresses || !contractAddresses.TEST_TOKEN_ADDRESS) {
+            return null;
+        }
+        
+        try {
+            const balance = await communityVault.getBalance(contractAddresses.TEST_TOKEN_ADDRESS);
+            return {
+                raw: balance,
+                formatted: ethers.formatUnits(balance, 18)
+            };
+        } catch (error) {
+            console.error('Error getting community vault test token balance:', error);
+            return null;
+        }
+    };
+
+    // Function to deposit test tokens to the community vault
+    const depositTestTokensToVault = async (amount) => {
+        if (!testToken || !signer || !communityVault || !contractAddresses?.COMMUNITY_VAULT_ADDRESS) {
+            return { 
+                success: false, 
+                error: 'Test token contract, community vault, or signer not available' 
+            };
+        }
+
+        try {
+            // Convert amount to wei (assuming 18 decimals for the test token)
+            const amountInWei = parseUnits(amount.toString(), 18);
+            
+            // First approve the vault to spend the tokens
+            const approveTx = await testToken.approve(
+                contractAddresses.COMMUNITY_VAULT_ADDRESS,
+                amountInWei
+            );
+            await approveTx.wait();
+            console.log('Approval for test token transfer successful');
+            
+            // Then deposit to the vault
+            const depositTx = await communityVault.deposit(
+                contractAddresses.TEST_TOKEN_ADDRESS,
+                amountInWei
+            );
+            const receipt = await depositTx.wait();
+            
+            return {
+                success: true,
+                txHash: receipt.hash
+            };
+        } catch (error) {
+            console.error('Error depositing test tokens to vault:', error);
+            return {
+                success: false,
+                error: error.message || 'Unknown error occurred while depositing test tokens'
+            };
+        }
+    };
+
+    /**
+     * Distribute rewards to recipients from the community vault
+     * @param {string} tokenAddress - The address of the token to distribute
+     * @param {string[]} recipients - Array of recipient addresses
+     * @returns {Promise<{success: boolean, txHash: string, error: string}>} - Result of the transaction
+     */
+    const distributeRewards = async (tokenAddress, recipients) => {
+        if (!communityVault || !signer) {
+            return { 
+                success: false, 
+                error: 'Community vault contract or signer not available' 
+            };
+        }
+
+        try {
+            // First check if the current user has the system role to call this function
+            const tx = await communityVault.connect(signer).distributeRewards(
+                tokenAddress,
+                recipients
+            );
+            
+            const receipt = await tx.wait();
+            
+            return {
+                success: true,
+                txHash: receipt.hash
+            };
+        } catch (error) {
+            console.error('Error distributing rewards:', error);
+            return {
+                success: false,
+                error: error.message || 'Unknown error occurred while distributing rewards'
+            };
+        }
+    };
+
+    /**
+     * Claim rewards for the current user
+     * @param {string} tokenAddress - The address of the token to claim rewards for
+     * @returns {Promise<{success: boolean, txHash: string, error: string}>} - Result of the transaction
+     */
+    const claimRewards = async (tokenAddress) => {
+        if (!communityVault || !signer) {
+            return { 
+                success: false, 
+                error: 'Community vault contract or signer not available' 
+            };
+        }
+
+        try {
+            const tx = await communityVault.connect(signer).claimRewards(tokenAddress);
+            const receipt = await tx.wait();
+            
+            return {
+                success: true,
+                txHash: receipt.hash
+            };
+        } catch (error) {
+            console.error('Error claiming rewards:', error);
+            return {
+                success: false,
+                error: error.message || 'Unknown error occurred while claiming rewards'
+            };
         }
     };
 
@@ -1175,6 +1298,10 @@ export const Web3Provider = ({ children }) => {
                 getUserPurchaseInfo,
                 getUserSalesInfo,
                 getCommunityVaultLootBalance,
+                getCommunityVaultTestTokenBalance,
+                depositTestTokensToVault,
+                distributeRewards,
+                claimRewards,
                 // New TestToken related functions
                 testToken,
                 mintTestTokens,
