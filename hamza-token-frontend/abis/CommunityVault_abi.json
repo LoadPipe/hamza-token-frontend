@@ -120,6 +120,35 @@
   },
   {
     "type": "function",
+    "name": "lastClaimCheckpoints",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "lastClaimedPurchases",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lastClaimedSales",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "purchaseTracker",
     "inputs": [],
     "outputs": [
@@ -149,12 +178,12 @@
     "name": "rewardsDistributed",
     "inputs": [
       {
-        "name": "",
+        "name": "token",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "recipient",
         "type": "address",
         "internalType": "address"
       }
@@ -237,25 +266,6 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "tokenBalances",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -348,6 +358,18 @@
       },
       {
         "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newPurchaseCheckpoint",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newSalesCheckpoint",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
