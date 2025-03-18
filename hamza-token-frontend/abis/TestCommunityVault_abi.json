@@ -433,6 +433,20 @@
   },
   {
     "type": "function",
+    "name": "testClaimMultipleRewards",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testClaimMultipleSamePerson",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "testDepositEmitsEvent",
     "inputs": [],
     "outputs": [],
@@ -511,6 +525,13 @@
   {
     "type": "function",
     "name": "testDistributeRewardsForSeller",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "testDoubleClaimBugDetection",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
